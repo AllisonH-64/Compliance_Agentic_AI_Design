@@ -1,0 +1,8 @@
+{
+  "case_id": "CASE-1002",
+  "transaction_id": "TX-9002",
+  "amount": 18500,
+  "currency": "USD",
+  "requestor_role": "operations_manager",
+  "approval_record": null
+}

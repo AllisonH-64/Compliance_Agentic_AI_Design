@@ -1,0 +1,11 @@
+{
+  "case_id": "CASE-1001",
+  "transaction_id": "TX-9001",
+  "amount": 12500,
+  "currency": "USD",
+  "requestor_role": "procurement_manager",
+  "approval_record": {
+    "approver_role": "finance_director",
+    "approved": true
+  }
+}
