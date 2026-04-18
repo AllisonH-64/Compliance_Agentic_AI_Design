@@ -1,0 +1,13 @@
+{
+  "case_id": "CASE-2001",
+  "transaction_id": "TX-9101",
+  "control_id": "FIN-RECEIPT-002",
+  "amount": 415,
+  "currency": "USD",
+  "requestor_role": "sales_manager",
+  "approval_record": null,
+  "receipt_record": {
+    "attached": true,
+    "document_id": "RCPT-7781"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "control_id": "FIN-RECEIPT-002",
+  "control_domain": "expense_receipt",
+  "policy_name": "Expense Receipt Retention Policy",
+  "policy_version": "2026-04-01",
+  "description": "Employee expenses at or above the threshold must include a receipt image or invoice reference.",
+  "threshold_amount": 250,
+  "required_evidence": [
+    "receipt_record"
+  ],
+  "required_currency": "USD"
+}

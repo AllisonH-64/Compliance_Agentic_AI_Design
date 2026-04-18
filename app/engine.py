@@ -161,8 +161,23 @@ def _evaluate_expense_receipt(
 ) -> DecisionRecord:
     evidence_references = _build_base_evidence_references(transaction_case)
 
-    if transaction_case.required_currency is not None:
-        pass
+    if rule.required_currency is not None and transaction_case.currency != rule.required_currency:
+        return DecisionRecord(
+            case_id=transaction_case.case_id,
+            transaction_id=transaction_case.transaction_id,
+            decision=DecisionState.HUMAN_REVIEW_REQUIRED,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                "Transaction was routed to the expense receipt control, but the submitted currency does not match the configured policy scope."
+            ),
+            severity_score=0.45,
+            confidence_score=0.78,
+            recommended_action="Route to human review to confirm whether this transaction belongs to the expense receipt policy scope.",
+            evidence_references=evidence_references,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
 
     if transaction_case.amount < rule.threshold_amount:
         return DecisionRecord(

@@ -1,7 +1,12 @@
 {
   "control_id": "FIN-APPROVAL-001",
+  "control_domain": "transaction_approval",
   "policy_name": "Large Transaction Approval Policy",
   "policy_version": "2026-04-01",
+  "description": "Transactions at or above the threshold require approval from the finance director.",
   "threshold_amount": 10000,
+  "required_evidence": [
+    "approval_record"
+  ],
   "required_approver_role": "finance_director"
 }

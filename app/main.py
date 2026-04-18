@@ -2,15 +2,18 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
 
-from app.engine import evaluate_transaction_case, load_rule
+from app.engine import calculate_review_queue_metrics, evaluate_transaction_case, load_rule, load_rules
 from app.models import (
+    DEFAULT_CONTROL_ID,
     DecisionRecord,
     DecisionState,
     ReviewAssignment,
+    ReviewQueueMetrics,
     ReviewQueueItem,
     ReviewRecord,
     ReviewStart,
     ReviewStatus,
+    RuleMetadata,
     ReviewSubmission,
     TransactionCase,
 )
@@ -41,14 +44,33 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/rules/current")
-def current_rule() -> dict[str, str | float]:
-    return load_rule().model_dump()
+@app.get("/rules", response_model=list[RuleMetadata])
+def get_rules() -> list[RuleMetadata]:
+    return load_rules()
+
+
+@app.get("/rules/current", response_model=RuleMetadata)
+def current_rule(control_id: str | None = None) -> RuleMetadata:
+    try:
+        return load_rule(control_id or DEFAULT_CONTROL_ID)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@app.get("/rules/{control_id}", response_model=RuleMetadata)
+def get_rule(control_id: str) -> RuleMetadata:
+    try:
+        return load_rule(control_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @app.post("/evaluate", response_model=DecisionRecord)
 def evaluate_case(transaction_case: TransactionCase) -> DecisionRecord:
-    decision_record = evaluate_transaction_case(transaction_case)
+    try:
+        decision_record = evaluate_transaction_case(transaction_case)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     save_decision(decision_record)
     return decision_record
 
@@ -71,6 +93,11 @@ def get_decision_by_case_id(case_id: str) -> DecisionRecord:
 @app.get("/reviews/queue", response_model=list[ReviewQueueItem])
 def get_review_queue() -> list[ReviewQueueItem]:
     return list_review_queue()
+
+
+@app.get("/reviews/metrics", response_model=ReviewQueueMetrics)
+def get_review_metrics() -> ReviewQueueMetrics:
+    return calculate_review_queue_metrics(list_decisions())
 
 
 @app.get("/reviews/{case_id}", response_model=ReviewRecord)

@@ -1,0 +1,10 @@
+{
+  "case_id": "CASE-2002",
+  "transaction_id": "TX-9102",
+  "control_id": "FIN-RECEIPT-002",
+  "amount": 640,
+  "currency": "USD",
+  "requestor_role": "field_engineer",
+  "approval_record": null,
+  "receipt_record": null
+}
