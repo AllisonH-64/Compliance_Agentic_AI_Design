@@ -3,6 +3,9 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
+DEFAULT_CONTROL_ID = "FIN-APPROVAL-001"
+
+
 class DecisionState(str, Enum):
     COMPLIANT = "compliant"
     NON_COMPLIANT = "non_compliant"
@@ -29,9 +32,18 @@ class ApprovalRecord(BaseModel):
     approved: bool = Field(..., description="Whether an approval was granted")
 
 
+class ReceiptRecord(BaseModel):
+    attached: bool = Field(..., description="Whether a receipt or invoice image was attached")
+    document_id: str | None = Field(default=None, description="Identifier for the attached receipt evidence")
+
+
 class TransactionCase(BaseModel):
     case_id: str = Field(..., description="Unique identifier for the compliance case")
     transaction_id: str = Field(..., description="Unique identifier for the transaction")
+    control_id: str = Field(
+        default=DEFAULT_CONTROL_ID,
+        description="Identifier for the rule control to evaluate against",
+    )
     amount: float = Field(..., gt=0, description="Transaction amount")
     currency: str = Field(..., min_length=3, max_length=3, description="ISO currency code")
     requestor_role: str = Field(..., description="Role of the user requesting the transaction")
@@ -39,14 +51,22 @@ class TransactionCase(BaseModel):
         default=None,
         description="Approval evidence attached to the case",
     )
+    receipt_record: ReceiptRecord | None = Field(
+        default=None,
+        description="Receipt evidence attached to the case when required by the selected control",
+    )
 
 
 class RuleMetadata(BaseModel):
     control_id: str
+    control_domain: str
     policy_name: str
     policy_version: str
+    description: str
     threshold_amount: float
-    required_approver_role: str
+    required_evidence: list[str]
+    required_approver_role: str | None = None
+    required_currency: str | None = None
 
 
 class DecisionRecord(BaseModel):
@@ -96,3 +116,14 @@ class ReviewRecord(BaseModel):
 class ReviewQueueItem(BaseModel):
     decision_record: DecisionRecord
     review_record: ReviewRecord | None
+
+
+class ReviewQueueMetrics(BaseModel):
+    active_review_count: int
+    pending_count: int
+    assigned_count: int
+    in_review_count: int
+    breached_sla_count: int
+    average_queue_age_hours: float
+    oldest_queue_age_hours: float
+    sla_target_hours: float
