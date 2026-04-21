@@ -2,6 +2,22 @@
 
 This MVP implements a narrow but realistic Ethics and Compliance workflow for gifts, meals, entertainment, and travel with a shared deterministic evaluation and human review pattern.
 
+## Selected Recurring Process For The Assignment
+
+The recurring process selected for the next phase of the project is vendor invoice review.
+
+- business activity: accounts payable and procurement teams process a high volume of vendor invoices
+- compliance problem: invoices must be checked for accuracy, fraud indicators, and adherence to procurement controls
+- agent role: monitor invoice submissions, triage exceptions, and summarize flagged cases for compliance or finance review
+
+Typical issues the agent would watch for include:
+
+- invoice amount does not match the purchase order or goods receipt
+- duplicate invoice numbers or repeated invoice amounts from the same vendor
+- missing approval or approval from the wrong authority
+- invoice submitted outside agreed payment terms or procurement workflow
+- suspicious vendor behavior that may indicate fraud or policy circumvention
+
 ## Use Case
 
 - Trigger: an employee submits a gifts or hospitality request or a reimbursement case for review

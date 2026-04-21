@@ -6,6 +6,22 @@ This project is best framed as an Agentic AI assistant for gifts, meals, enterta
 
 The system does not replace compliance officers. It reduces manual triage by collecting the right evidence, applying the policy consistently, and routing only the cases that need judgment.
 
+## Selected Recurring Process To Monitor
+
+For the next project step, the selected recurring compliance process is reviewing vendor invoices for accuracy, fraud detection, and compliance with procurement policies.
+
+This process is a strong fit for an AI agent because it requires repeated monitoring, triage, and summarization at scale:
+
+- monitoring: compare invoice details against purchase orders, approval records, vendor master data, and payment terms
+- triage: flag duplicate invoices, mismatched amounts, missing approvals, split purchases, or suspicious vendor patterns for analyst review
+- summarization: prepare a concise case summary that explains the discrepancy, supporting evidence, and recommended next action
+
+It is also operationally important because invoice review happens continuously, touches multiple systems, and exposes the organization to overpayment, fraud, and policy-breach risk if handled inconsistently.
+
+## Note On Current MVP
+
+The current MVP in this repository still implements a gifts-and-hospitality workflow. The vendor invoice process is the selected next design direction for the assignment and can reuse the same agentic pattern: intake, evidence collection, deterministic checks, risk routing, human review, and audit logging.
+
 ## The Business Problem
 
 Large organizations receive a steady stream of requests and reimbursement submissions for customer meals, event tickets, travel, and other hospitality. Compliance teams need to answer the same questions repeatedly:
