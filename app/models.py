@@ -27,6 +27,13 @@ class ReviewStatus(str, Enum):
     COMPLETED = "completed"
 
 
+class UserRole(str, Enum):
+    EMPLOYEE = "employee"
+    COMPLIANCE_ANALYST = "compliance_analyst"
+    COMPLIANCE_MANAGER = "compliance_manager"
+    AUDITOR = "auditor"
+
+
 class ApprovalRecord(BaseModel):
     approver_role: str = Field(..., description="Role that approved the case")
     approved: bool = Field(..., description="Whether an approval was granted")
@@ -127,3 +134,15 @@ class ReviewQueueMetrics(BaseModel):
     average_queue_age_hours: float
     oldest_queue_age_hours: float
     sla_target_hours: float
+
+
+class ComplianceSummaryReport(BaseModel):
+    generated_at: str
+    total_decisions: int
+    compliant_count: int
+    non_compliant_count: int
+    insufficient_evidence_count: int
+    human_review_required_count: int
+    active_review_count: int
+    completed_review_count: int
+    override_count: int

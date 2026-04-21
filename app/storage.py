@@ -1,22 +1,45 @@
 import json
+import os
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.engine import load_rule
 from app.models import DecisionRecord, ReviewRecord, ReviewQueueItem, ReviewStatus
 
 
-DB_PATH = Path(__file__).resolve().parents[1] / "data" / "audit.db"
+DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "audit.db"
+DB_PATH_ENV_VAR = "COMPLIANCE_AUDIT_DB_PATH"
+_db_path_override: Path | None = None
+
+
+def get_db_path() -> Path:
+    if _db_path_override is not None:
+        return _db_path_override
+
+    configured_path = os.getenv(DB_PATH_ENV_VAR)
+    if configured_path:
+        return Path(configured_path)
+
+    return DEFAULT_DB_PATH
+
+
+def set_db_path(path: str | Path | None) -> None:
+    global _db_path_override
+
+    _db_path_override = Path(path) if path is not None else None
+    init_db()
 
 
 def get_connection() -> sqlite3.Connection:
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(get_db_path())
     connection.row_factory = sqlite3.Row
     return connection
 
 
 def init_db() -> None:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    db_path = get_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
 
     with get_connection() as connection:
         connection.execute(
@@ -37,11 +60,44 @@ def init_db() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS decision_history (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                decision_json TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS review_history (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                review_json TEXT NOT NULL
+            )
+            """
+        )
         connection.commit()
 
 
-def save_decision(decision_record: DecisionRecord) -> None:
+def save_decision(
+    decision_record: DecisionRecord,
+    *,
+    event_type: str = "decision_saved",
+    actor_id: str = "system",
+    actor_role: str = "system",
+) -> None:
     serialized_record = json.dumps(decision_record.model_dump(mode="json"))
+    recorded_at = datetime.now(UTC).isoformat()
 
     with get_connection() as connection:
         connection.execute(
@@ -55,6 +111,27 @@ def save_decision(decision_record: DecisionRecord) -> None:
             (
                 decision_record.case_id,
                 decision_record.transaction_id,
+                serialized_record,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO decision_history (
+                case_id,
+                event_type,
+                actor_id,
+                actor_role,
+                recorded_at,
+                decision_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                decision_record.case_id,
+                event_type,
+                actor_id,
+                actor_role,
+                recorded_at,
                 serialized_record,
             ),
         )
@@ -116,8 +193,15 @@ def get_decision(case_id: str) -> DecisionRecord | None:
     return _deserialize_decision(row["decision_json"])
 
 
-def save_review(review_record: ReviewRecord) -> None:
+def save_review(
+    review_record: ReviewRecord,
+    *,
+    event_type: str = "review_saved",
+    actor_id: str = "system",
+    actor_role: str = "system",
+) -> None:
     serialized_record = json.dumps(review_record.model_dump(mode="json"))
+    recorded_at = datetime.now(UTC).isoformat()
 
     with get_connection() as connection:
         connection.execute(
@@ -129,6 +213,27 @@ def save_review(review_record: ReviewRecord) -> None:
             """,
             (
                 review_record.case_id,
+                serialized_record,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO review_history (
+                case_id,
+                event_type,
+                actor_id,
+                actor_role,
+                recorded_at,
+                review_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                review_record.case_id,
+                event_type,
+                actor_id,
+                actor_role,
+                recorded_at,
                 serialized_record,
             ),
         )

@@ -4,7 +4,7 @@ This repository defines a practical concept for an Agentic AI system that suppor
 
 ## Current status
 
-This repository now contains the design baseline and a FastAPI MVP with two deterministic gifts-and-hospitality controls, human review workflow support, review queue metrics, and a local SQLite audit trail.
+This repository now contains the design baseline and a FastAPI MVP with two deterministic gifts-and-hospitality controls, human review workflow support, review queue metrics, simple role-based access control, append-only audit history, and a local SQLite audit trail.
 
 ## Contents
 
@@ -28,6 +28,11 @@ This repository now contains the design baseline and a FastAPI MVP with two dete
 3. Start the API with `uvicorn app.main:app --reload`.
 4. Open `http://127.0.0.1:8000/docs` for the interactive API docs.
 
+Protected endpoints require these headers:
+
+- `X-User-Id`: caller identifier
+- `X-User-Role`: one of `employee`, `compliance_analyst`, `compliance_manager`, or `auditor`
+
 ## Example endpoints
 
 - `GET /health`
@@ -39,6 +44,7 @@ This repository now contains the design baseline and a FastAPI MVP with two dete
 - `GET /decisions/{case_id}`
 - `GET /reviews/queue` - active review cases
 - `GET /reviews/metrics` - queue volume and SLA-style aging metrics
+- `GET /reports/summary` - management summary of decisions, reviews, and overrides
 - `GET /reviews/{case_id}`
 - `POST /reviews/{case_id}/assign`
 - `POST /reviews/{case_id}/start`
@@ -52,9 +58,12 @@ Reviewer submissions now set the final case decision and close the review requir
 - gifts-and-hospitality approval and receipt cases evaluate correctly with the sample payload shapes
 - review-required cases enter the queue, support assignment and in-review transitions, and persist the final reviewer disposition
 - review queue metrics aggregate active review cases from the persisted audit store
+- role-based access checks protect sensitive decision and review endpoints
+- append-only decision and review history is preserved alongside the latest case state
+- automated API tests cover auth, review lifecycle, audit history, and summary reporting
 
 ## Next steps
 
-- add automated API tests for both controls and the review lifecycle
 - extend the workflow with recipient-risk factors such as government official involvement, geography, and repeat interactions
 - refine queue semantics for reopened cases and older audit records
+- move from simple header-based roles to stronger authentication and signed identity

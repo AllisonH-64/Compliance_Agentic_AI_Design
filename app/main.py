@@ -1,9 +1,12 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 
 from app.engine import calculate_review_queue_metrics, evaluate_transaction_case, load_rule, load_rules
 from app.models import (
+    ComplianceSummaryReport,
     DEFAULT_CONTROL_ID,
     DecisionRecord,
     DecisionState,
@@ -16,6 +19,7 @@ from app.models import (
     RuleMetadata,
     ReviewSubmission,
     TransactionCase,
+    UserRole,
 )
 from app.storage import (
     get_decision,
@@ -37,6 +41,40 @@ app = FastAPI(
 )
 
 init_db()
+
+
+@dataclass(frozen=True)
+class AuthContext:
+    user_id: str
+    role: UserRole
+
+
+def get_current_user(
+    x_user_id: Annotated[str | None, Header(alias="X-User-Id")] = None,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+) -> AuthContext:
+    if x_user_id is None or x_user_role is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing X-User-Id or X-User-Role header",
+        )
+
+    try:
+        role = UserRole(x_user_role)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid user role") from error
+
+    return AuthContext(user_id=x_user_id, role=role)
+
+
+def require_roles(*allowed_roles: UserRole):
+    def dependency(current_user: Annotated[AuthContext, Depends(get_current_user)]) -> AuthContext:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User role not permitted")
+
+        return current_user
+
+    return dependency
 
 
 @app.get("/health")
@@ -66,22 +104,44 @@ def get_rule(control_id: str) -> RuleMetadata:
 
 
 @app.post("/evaluate", response_model=DecisionRecord)
-def evaluate_case(transaction_case: TransactionCase) -> DecisionRecord:
+def evaluate_case(
+    transaction_case: TransactionCase,
+    current_user: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.EMPLOYEE, UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER)),
+    ],
+) -> DecisionRecord:
     try:
         decision_record = evaluate_transaction_case(transaction_case)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    save_decision(decision_record)
+    save_decision(
+        decision_record,
+        event_type="decision_evaluated",
+        actor_id=current_user.user_id,
+        actor_role=current_user.role.value,
+    )
     return decision_record
 
 
 @app.get("/decisions", response_model=list[DecisionRecord])
-def get_decisions() -> list[DecisionRecord]:
+def get_decisions(
+    _: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER, UserRole.AUDITOR)),
+    ],
+) -> list[DecisionRecord]:
     return list_decisions()
 
 
 @app.get("/decisions/{case_id}", response_model=DecisionRecord)
-def get_decision_by_case_id(case_id: str) -> DecisionRecord:
+def get_decision_by_case_id(
+    case_id: str,
+    _: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER, UserRole.AUDITOR)),
+    ],
+) -> DecisionRecord:
     decision_record = get_decision(case_id)
 
     if decision_record is None:
@@ -91,17 +151,59 @@ def get_decision_by_case_id(case_id: str) -> DecisionRecord:
 
 
 @app.get("/reviews/queue", response_model=list[ReviewQueueItem])
-def get_review_queue() -> list[ReviewQueueItem]:
+def get_review_queue(
+    _: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER, UserRole.AUDITOR)),
+    ],
+) -> list[ReviewQueueItem]:
     return list_review_queue()
 
 
 @app.get("/reviews/metrics", response_model=ReviewQueueMetrics)
-def get_review_metrics() -> ReviewQueueMetrics:
+def get_review_metrics(
+    _: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER, UserRole.AUDITOR)),
+    ],
+) -> ReviewQueueMetrics:
     return calculate_review_queue_metrics(list_decisions())
 
 
+@app.get("/reports/summary", response_model=ComplianceSummaryReport)
+def get_summary_report(
+    _: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER, UserRole.AUDITOR)),
+    ],
+) -> ComplianceSummaryReport:
+    decisions = list_decisions()
+
+    return ComplianceSummaryReport(
+        generated_at=datetime.now(UTC).isoformat(),
+        total_decisions=len(decisions),
+        compliant_count=sum(1 for decision in decisions if decision.decision == DecisionState.COMPLIANT),
+        non_compliant_count=sum(1 for decision in decisions if decision.decision == DecisionState.NON_COMPLIANT),
+        insufficient_evidence_count=sum(
+            1 for decision in decisions if decision.decision == DecisionState.INSUFFICIENT_EVIDENCE
+        ),
+        human_review_required_count=sum(
+            1 for decision in decisions if decision.decision == DecisionState.HUMAN_REVIEW_REQUIRED
+        ),
+        active_review_count=sum(1 for decision in decisions if decision.review_required),
+        completed_review_count=sum(1 for decision in decisions if decision.review_status == ReviewStatus.COMPLETED),
+        override_count=sum(1 for decision in decisions if decision.final_reviewer_outcome == "overridden"),
+    )
+
+
 @app.get("/reviews/{case_id}", response_model=ReviewRecord)
-def get_review_by_case_id(case_id: str) -> ReviewRecord:
+def get_review_by_case_id(
+    case_id: str,
+    _: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER, UserRole.AUDITOR)),
+    ],
+) -> ReviewRecord:
     review_record = get_review(case_id)
 
     if review_record is None:
@@ -111,7 +213,11 @@ def get_review_by_case_id(case_id: str) -> ReviewRecord:
 
 
 @app.post("/reviews/{case_id}/assign", response_model=DecisionRecord)
-def assign_review(case_id: str, review_assignment: ReviewAssignment) -> DecisionRecord:
+def assign_review(
+    case_id: str,
+    review_assignment: ReviewAssignment,
+    current_user: Annotated[AuthContext, Depends(require_roles(UserRole.COMPLIANCE_MANAGER))],
+) -> DecisionRecord:
     decision_record = get_decision(case_id)
 
     if decision_record is None:
@@ -130,12 +236,24 @@ def assign_review(case_id: str, review_assignment: ReviewAssignment) -> Decision
             "assigned_at": datetime.now(UTC).isoformat(),
         }
     )
-    save_decision(assigned_decision)
+    save_decision(
+        assigned_decision,
+        event_type="review_assigned",
+        actor_id=current_user.user_id,
+        actor_role=current_user.role.value,
+    )
     return assigned_decision
 
 
 @app.post("/reviews/{case_id}/start", response_model=DecisionRecord)
-def start_review(case_id: str, review_start: ReviewStart) -> DecisionRecord:
+def start_review(
+    case_id: str,
+    review_start: ReviewStart,
+    current_user: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER)),
+    ],
+) -> DecisionRecord:
     decision_record = get_decision(case_id)
 
     if decision_record is None:
@@ -148,6 +266,9 @@ def start_review(case_id: str, review_start: ReviewStart) -> DecisionRecord:
     if assigned_reviewer_id is not None and assigned_reviewer_id != review_start.reviewer_id:
         raise HTTPException(status_code=400, detail="Review is assigned to a different reviewer")
 
+    if current_user.user_id != review_start.reviewer_id:
+        raise HTTPException(status_code=403, detail="Authenticated user must match reviewer_id")
+
     in_review_decision = decision_record.model_copy(
         update={
             "review_status": ReviewStatus.IN_REVIEW,
@@ -156,12 +277,24 @@ def start_review(case_id: str, review_start: ReviewStart) -> DecisionRecord:
             "review_started_at": datetime.now(UTC).isoformat(),
         }
     )
-    save_decision(in_review_decision)
+    save_decision(
+        in_review_decision,
+        event_type="review_started",
+        actor_id=current_user.user_id,
+        actor_role=current_user.role.value,
+    )
     return in_review_decision
 
 
 @app.post("/reviews/{case_id}", response_model=ReviewRecord)
-def submit_review(case_id: str, review_submission: ReviewSubmission) -> ReviewRecord:
+def submit_review(
+    case_id: str,
+    review_submission: ReviewSubmission,
+    current_user: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER)),
+    ],
+) -> ReviewRecord:
     decision_record = get_decision(case_id)
 
     if decision_record is None:
@@ -176,6 +309,9 @@ def submit_review(case_id: str, review_submission: ReviewSubmission) -> ReviewRe
     assigned_reviewer_id = decision_record.assigned_reviewer_id
     if assigned_reviewer_id is not None and assigned_reviewer_id != review_submission.reviewer_id:
         raise HTTPException(status_code=400, detail="Review is assigned to a different reviewer")
+
+    if current_user.user_id != review_submission.reviewer_id:
+        raise HTTPException(status_code=403, detail="Authenticated user must match reviewer_id")
 
     review_record = ReviewRecord(
         case_id=case_id,
@@ -200,6 +336,16 @@ def submit_review(case_id: str, review_submission: ReviewSubmission) -> ReviewRe
         }
     )
 
-    save_review(review_record)
-    save_decision(finalized_decision)
+    save_review(
+        review_record,
+        event_type="review_submitted",
+        actor_id=current_user.user_id,
+        actor_role=current_user.role.value,
+    )
+    save_decision(
+        finalized_decision,
+        event_type="review_completed",
+        actor_id=current_user.user_id,
+        actor_role=current_user.role.value,
+    )
     return review_record

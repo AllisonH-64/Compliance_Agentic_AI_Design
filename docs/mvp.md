@@ -30,19 +30,29 @@ Typical issues the agent would watch for include:
 - `app/main.py` exposes API endpoints
 - `app/engine.py` loads the rule catalog, selects the control by `control_id`, and evaluates the case deterministically
 - `app/models.py` defines the request and response schema
-- `app/storage.py` persists decision records in a local SQLite audit store
+- `app/storage.py` persists decision records in a local SQLite audit store and appends immutable history rows for lifecycle events
 - `data/rules/approval_thresholds.json` stores the gifts-and-hospitality pre-approval control metadata
 - `data/rules/expense_receipts.json` stores the gifts-and-hospitality evidence control metadata
 - `examples/` contains sample payloads for manual testing
+- `tests/test_api.py` covers the protected API workflow end to end
 
 ## Audit Trail
 
 - every evaluation returns an `evaluated_at` timestamp
-- every `POST /evaluate` call persists or updates a decision record by `case_id`
+- every `POST /evaluate` call persists or updates a current decision record by `case_id`
+- every decision and review save also writes an append-only history record with actor and event metadata
 - `GET /decisions` lists all stored decision records
 - `GET /decisions/{case_id}` returns one stored record for audit lookup
 - persisted decisions remain readable even when older audit rows predate newer rule metadata fields
 - completed human reviews update the stored decision record with the final disposition
+
+## Access Control And Reporting
+
+- protected endpoints require `X-User-Id` and `X-User-Role` headers
+- allowed roles are `employee`, `compliance_analyst`, `compliance_manager`, and `auditor`
+- only `compliance_manager` can assign reviews
+- only authenticated reviewers can start or submit their own review actions
+- `GET /reports/summary` provides management counts for decisions, active reviews, completed reviews, and overrides
 
 ## Human Review Workflow
 
@@ -67,9 +77,12 @@ Typical issues the agent would watch for include:
 - verified: gifts-and-hospitality approval and receipt examples evaluate with the expected decisions
 - verified: queue, assignment, start, and review completion flows work end to end
 - verified: queue metrics load successfully after adding backward-compatible deserialization for legacy audit rows
+- verified: role-based access checks reject unauthorized review actions
+- verified: audit history captures each decision lifecycle step without losing the latest case state
+- verified: focused API tests pass for auth, reporting, and review completion
 
 ## Immediate Next Build Step
 
-- add automated tests for `/evaluate`, `/reviews/queue`, `/reviews/metrics`, and the review lifecycle
 - decide how reopened cases should interact with prior review records in the audit store
 - add recipient and context risk signals such as government official status, country, and event purpose
+- replace header-only role assertions with stronger authentication and identity binding
