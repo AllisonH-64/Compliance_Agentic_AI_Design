@@ -1,12 +1,12 @@
 {
-  "control_id": "FIN-APPROVAL-001",
+  "control_id": "ETH-GIFT-001",
   "control_domain": "transaction_approval",
-  "policy_name": "Large Transaction Approval Policy",
+  "policy_name": "Gifts and Hospitality Pre-Approval Policy",
   "policy_version": "2026-04-01",
-  "description": "Transactions at or above the threshold require approval from the finance director.",
-  "threshold_amount": 10000,
+  "description": "Gifts, meals, entertainment, or travel spend at or above the threshold require approval from the compliance manager before the spend is incurred.",
+  "threshold_amount": 150,
   "required_evidence": [
     "approval_record"
   ],
-  "required_approver_role": "finance_director"
+  "required_approver_role": "compliance_manager"
 }

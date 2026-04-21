@@ -32,7 +32,7 @@ app = FastAPI(
     title="Compliance Agentic AI MVP",
     version="0.1.0",
     description=(
-        "A thin vertical slice for approval-threshold compliance checks with deterministic policy evaluation."
+        "A thin vertical slice for gifts-and-hospitality compliance checks with deterministic policy evaluation."
     ),
 )
 

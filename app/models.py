@@ -3,7 +3,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-DEFAULT_CONTROL_ID = "FIN-APPROVAL-001"
+DEFAULT_CONTROL_ID = "ETH-GIFT-001"
 
 
 class DecisionState(str, Enum):
@@ -28,7 +28,7 @@ class ReviewStatus(str, Enum):
 
 
 class ApprovalRecord(BaseModel):
-    approver_role: str = Field(..., description="Role that approved the transaction")
+    approver_role: str = Field(..., description="Role that approved the case")
     approved: bool = Field(..., description="Whether an approval was granted")
 
 
@@ -39,14 +39,14 @@ class ReceiptRecord(BaseModel):
 
 class TransactionCase(BaseModel):
     case_id: str = Field(..., description="Unique identifier for the compliance case")
-    transaction_id: str = Field(..., description="Unique identifier for the transaction")
+    transaction_id: str = Field(..., description="Unique identifier for the spend submission or transaction")
     control_id: str = Field(
         default=DEFAULT_CONTROL_ID,
         description="Identifier for the rule control to evaluate against",
     )
-    amount: float = Field(..., gt=0, description="Transaction amount")
+    amount: float = Field(..., gt=0, description="Submitted spend amount")
     currency: str = Field(..., min_length=3, max_length=3, description="ISO currency code")
-    requestor_role: str = Field(..., description="Role of the user requesting the transaction")
+    requestor_role: str = Field(..., description="Role of the user submitting the case")
     approval_record: ApprovalRecord | None = Field(
         default=None,
         description="Approval evidence attached to the case",

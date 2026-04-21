@@ -1,10 +1,10 @@
 {
   "case_id": "CASE-1002",
   "transaction_id": "TX-9002",
-  "control_id": "FIN-APPROVAL-001",
-  "amount": 18500,
+  "control_id": "ETH-GIFT-001",
+  "amount": 480,
   "currency": "USD",
-  "requestor_role": "operations_manager",
+  "requestor_role": "sales_manager",
   "approval_record": null,
   "receipt_record": null
 }

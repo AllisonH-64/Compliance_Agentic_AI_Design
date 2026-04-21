@@ -22,6 +22,17 @@ The system should answer five questions reliably:
 4. How confident is the conclusion?
 5. What action should happen next?
 
+## 2A. Recommended Project Framing
+
+For this repository, the clearest practical workflow is gifts, meals, entertainment, and travel compliance.
+
+Why this workflow fits well:
+
+- it is a real Ethics and Compliance process, not just a finance control
+- it combines clear policy thresholds with ambiguous exceptions
+- it naturally requires human review for higher-risk cases
+- it is easy to model with a small MVP and expand later into anti-bribery risk factors
+
 ## 3. Design Principles
 
 - Human accountable: AI flags and recommends; humans approve high-impact actions.

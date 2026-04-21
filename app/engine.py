@@ -68,7 +68,7 @@ def _evaluate_large_transaction_approval(
             decision=DecisionState.COMPLIANT,
             evaluated_at=evaluated_at,
             reasoning_summary=(
-                "Transaction amount is below the approval threshold and does not require escalation."
+                "Submitted spend is below the pre-approval threshold and does not require escalation."
             ),
             severity_score=0.1,
             confidence_score=0.97,
@@ -86,7 +86,7 @@ def _evaluate_large_transaction_approval(
             decision=DecisionState.INSUFFICIENT_EVIDENCE,
             evaluated_at=evaluated_at,
             reasoning_summary=(
-                "Transaction exceeds the approval threshold but no approval record was provided."
+                "Submitted spend exceeds the pre-approval threshold but no approval record was provided."
             ),
             severity_score=0.75,
             confidence_score=0.9,
@@ -107,7 +107,7 @@ def _evaluate_large_transaction_approval(
             decision=DecisionState.NON_COMPLIANT,
             evaluated_at=evaluated_at,
             reasoning_summary=(
-                "Transaction exceeds the approval threshold and the attached approval record is marked not approved."
+                "Submitted spend exceeds the pre-approval threshold and the attached approval record is marked not approved."
             ),
             severity_score=0.88,
             confidence_score=0.95,
@@ -125,7 +125,7 @@ def _evaluate_large_transaction_approval(
             decision=DecisionState.HUMAN_REVIEW_REQUIRED,
             evaluated_at=evaluated_at,
             reasoning_summary=(
-                "Transaction exceeds the approval threshold, but the attached approval came from a role that does not match the policy requirement."
+                "Submitted spend exceeds the pre-approval threshold, but the attached approval came from a role that does not match the policy requirement."
             ),
             severity_score=0.7,
             confidence_score=0.84,
@@ -142,7 +142,7 @@ def _evaluate_large_transaction_approval(
         decision=DecisionState.COMPLIANT,
         evaluated_at=evaluated_at,
         reasoning_summary=(
-            "Transaction exceeds the threshold and includes a valid approval from the required role."
+            "Submitted spend exceeds the threshold and includes a valid approval from the required role."
         ),
         severity_score=0.2,
         confidence_score=0.96,
@@ -168,11 +168,11 @@ def _evaluate_expense_receipt(
             decision=DecisionState.HUMAN_REVIEW_REQUIRED,
             evaluated_at=evaluated_at,
             reasoning_summary=(
-                "Transaction was routed to the expense receipt control, but the submitted currency does not match the configured policy scope."
+                "The case was routed to the receipt evidence control, but the submitted currency does not match the configured policy scope."
             ),
             severity_score=0.45,
             confidence_score=0.78,
-            recommended_action="Route to human review to confirm whether this transaction belongs to the expense receipt policy scope.",
+            recommended_action="Route to human review to confirm whether this case belongs to the receipt evidence policy scope.",
             evidence_references=evidence_references,
             review_required=True,
             review_status=ReviewStatus.PENDING,
@@ -186,7 +186,7 @@ def _evaluate_expense_receipt(
             decision=DecisionState.COMPLIANT,
             evaluated_at=evaluated_at,
             reasoning_summary=(
-                "Transaction amount is below the receipt threshold and does not require additional evidence."
+                "Submitted spend is below the receipt threshold and does not require additional evidence."
             ),
             severity_score=0.08,
             confidence_score=0.97,
@@ -204,7 +204,7 @@ def _evaluate_expense_receipt(
             decision=DecisionState.INSUFFICIENT_EVIDENCE,
             evaluated_at=evaluated_at,
             reasoning_summary=(
-                "Transaction exceeds the receipt threshold but no receipt evidence was provided."
+                "Submitted spend exceeds the receipt threshold but no receipt evidence was provided."
             ),
             severity_score=0.72,
             confidence_score=0.91,
@@ -224,11 +224,11 @@ def _evaluate_expense_receipt(
             decision=DecisionState.NON_COMPLIANT,
             evaluated_at=evaluated_at,
             reasoning_summary=(
-                "Transaction exceeds the receipt threshold and the submitted receipt record explicitly indicates no attachment."
+                "Submitted spend exceeds the receipt threshold and the submitted receipt record explicitly indicates no attachment."
             ),
             severity_score=0.8,
             confidence_score=0.94,
-            recommended_action="Hold reimbursement and route the case to a compliance analyst.",
+            recommended_action="Hold the case and route it to a compliance analyst.",
             evidence_references=evidence_references,
             review_required=True,
             review_status=ReviewStatus.PENDING,
@@ -241,7 +241,7 @@ def _evaluate_expense_receipt(
         decision=DecisionState.COMPLIANT,
         evaluated_at=evaluated_at,
         reasoning_summary=(
-            "Transaction exceeds the receipt threshold and includes the required receipt evidence."
+            "Submitted spend exceeds the receipt threshold and includes the required receipt evidence."
         ),
         severity_score=0.18,
         confidence_score=0.95,

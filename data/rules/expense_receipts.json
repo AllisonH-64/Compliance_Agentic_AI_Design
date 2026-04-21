@@ -1,10 +1,10 @@
 {
-  "control_id": "FIN-RECEIPT-002",
+  "control_id": "ETH-GIFT-002",
   "control_domain": "expense_receipt",
-  "policy_name": "Expense Receipt Retention Policy",
+  "policy_name": "Gifts and Hospitality Evidence Policy",
   "policy_version": "2026-04-01",
-  "description": "Employee expenses at or above the threshold must include a receipt image or invoice reference.",
-  "threshold_amount": 250,
+  "description": "Gifts, meals, entertainment, or travel spend at or above the threshold must include receipt or invoice evidence.",
+  "threshold_amount": 75,
   "required_evidence": [
     "receipt_record"
   ],

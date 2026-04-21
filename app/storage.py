@@ -2,6 +2,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+from app.engine import load_rule
 from app.models import DecisionRecord, ReviewRecord, ReviewQueueItem, ReviewStatus
 
 
@@ -62,6 +63,16 @@ def save_decision(decision_record: DecisionRecord) -> None:
 
 def _deserialize_decision(payload: str) -> DecisionRecord:
     raw_record = json.loads(payload)
+
+    raw_rule_metadata = raw_record.get("rule_metadata", {})
+    control_id = raw_rule_metadata.get("control_id")
+
+    if control_id is not None:
+        try:
+            current_rule = load_rule(control_id).model_dump(mode="json")
+            raw_record["rule_metadata"] = {**current_rule, **raw_rule_metadata}
+        except ValueError:
+            raw_record["rule_metadata"] = raw_rule_metadata
 
     if "review_status" not in raw_record:
         raw_record["review_status"] = (
