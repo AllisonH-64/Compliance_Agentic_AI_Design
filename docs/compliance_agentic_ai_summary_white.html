@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compliance Agentic AI Design Summary</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #1f2937;
+      --muted: #4b5563;
+      --heading: #111827;
+      --border: #e5e7eb;
+      --accent: #0f766e;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+    }
+
+    .page {
+      max-width: 920px;
+      margin: 32px auto;
+      padding: 28px 32px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+    }
+
+    h1, h2 {
+      color: var(--heading);
+      margin-top: 0;
+    }
+
+    h1 {
+      font-size: 1.9rem;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 22px;
+      color: var(--accent);
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    ol {
+      margin: 8px 0 12px 22px;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    .note {
+      margin-top: 20px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      background: #f8fafc;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <h1>Compliance Agentic AI Design Concept Summary</h1>
+
+    <p>
+      The design concept for the Compliance Agentic AI is a practical human-in-the-loop compliance system
+      that automates repetitive checks while keeping final accountability with compliance staff.
+    </p>
+
+    <h2>1. Core Purpose</h2>
+    <p>
+      It continuously evaluates business cases against policy rules, determines likely compliance status,
+      explains why, and decides whether to auto-close or escalate for human review.
+    </p>
+
+    <h2>2. Main Idea</h2>
+    <p>
+      The system is agentic, meaning specialized agents handle different stages of one compliance case:
+    </p>
+    <ol>
+      <li>Intake of a new event or request</li>
+      <li>Policy interpretation and rule selection</li>
+      <li>Evidence collection and normalization</li>
+      <li>Rule evaluation and reasoning</li>
+      <li>Risk scoring and routing</li>
+      <li>Human review support</li>
+      <li>Governance and learning feedback</li>
+    </ol>
+
+    <h2>3. Decision Philosophy</h2>
+    <p>
+      It is evidence-first and audit-by-default:
+    </p>
+    <ol>
+      <li>Every decision is tied to policy obligations and supporting evidence</li>
+      <li>Outputs include status, confidence, severity, and next action</li>
+      <li>High-risk or ambiguous cases are routed to human analysts</li>
+      <li>All actions are logged for defensibility and traceability</li>
+    </ol>
+
+    <h2>4. Current MVP Implementation in This Repository</h2>
+    <p>
+      The implemented slice focuses on gifts and hospitality compliance with deterministic controls:
+    </p>
+    <ol>
+      <li>Pre-approval required at or above a spend threshold</li>
+      <li>Receipt evidence required at or above a lower threshold</li>
+      <li>API endpoints support evaluation, review queue, assignment, start, and reviewer submission</li>
+      <li>Role-based access and SQLite audit history are included</li>
+    </ol>
+
+    <h2>5. Intended Next Design Direction</h2>
+    <p>
+      The documents also position vendor invoice review as the next recurring process, reusing the same pattern
+      (intake, checks, risk routing, human review, audit). This expands from basic threshold checks into broader
+      fraud and procurement compliance signals.
+    </p>
+
+    <div class="note">
+      In short: this concept is not AI replacing compliance, but AI handling scale and consistency,
+      while humans retain judgment and decision accountability.
+    </div>
+  </main>
+</body>
+</html>

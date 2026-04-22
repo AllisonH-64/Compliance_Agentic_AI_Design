@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compliance Agentic AI – Progress Review</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #1f2937;
+      --muted: #4b5563;
+      --heading: #111827;
+      --border: #e5e7eb;
+      --accent: #0f766e;
+      --done-bg: #f0fdf4;
+      --done-border: #86efac;
+      --pending-bg: #fefce8;
+      --pending-border: #fde68a;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.65;
+    }
+
+    .page {
+      max-width: 920px;
+      margin: 36px auto;
+      padding: 32px 36px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+    }
+
+    h1 {
+      color: var(--heading);
+      font-size: 1.85rem;
+      margin-top: 0;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    .meta {
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    h2 {
+      font-size: 1.05rem;
+      color: var(--accent);
+      margin-top: 32px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .phase {
+      margin-bottom: 28px;
+    }
+
+    .phase-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--heading);
+      margin-bottom: 10px;
+    }
+
+    .step-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .step-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      border-radius: 6px;
+      font-size: 0.97rem;
+    }
+
+    .step-list li.done {
+      background: var(--done-bg);
+      border-left: 4px solid var(--done-border);
+    }
+
+    .step-list li.pending {
+      background: var(--pending-bg);
+      border-left: 4px solid var(--pending-border);
+    }
+
+    .badge {
+      flex-shrink: 0;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      margin-top: 2px;
+    }
+
+    .badge.done {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .badge.pending {
+      background: #fef9c3;
+      color: #854d0e;
+    }
+
+    .step-text {
+      flex: 1;
+    }
+
+    .step-detail {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+
+    .note {
+      margin-top: 28px;
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .legend {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 24px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+    }
+
+    .swatch-done { background: #dcfce7; border: 1px solid #86efac; }
+    .swatch-pending { background: #fef9c3; border: 1px solid #fde68a; }
+  </style>
+</head>
+<body>
+  <main class="page">
+
+    <h1>Compliance Agentic AI – Design &amp; Build Progress Review</h1>
+    <p class="meta">Repository: AllisonH-64 / Compliance_Agentic_AI_Design &nbsp;·&nbsp; Branch: main &nbsp;·&nbsp; As of April 22, 2026</p>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch swatch-done"></div> Completed</div>
+      <div class="legend-item"><div class="legend-swatch swatch-pending"></div> Next / In Progress</div>
+    </div>
+
+    <!-- Phase 1 -->
+    <h2>Phase 1</h2>
+    <div class="phase">
+      <div class="phase-title">Concept &amp; Architecture Design</div>
+      <ul class="step-list">
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Defined the core concept: agentic AI for Ethics &amp; Compliance workflows
+            <div class="step-detail">Selected gifts, meals, entertainment, and travel review as the first target process</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Documented end-to-end architecture and agent roles
+            <div class="step-detail">docs/architecture.md — intake, policy interpretation, evidence collection, evaluation, routing, human review, governance</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Documented the ethics workflow concept
+            <div class="step-detail">docs/ethics_workflow.md — decision philosophy, evidence-first approach, human accountability model</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Published shareable design summary
+            <div class="step-detail">docs/compliance_agentic_ai_summary_white.html — white-background format for stakeholder sharing</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Phase 2 -->
+    <h2>Phase 2</h2>
+    <div class="phase">
+      <div class="phase-title">MVP Build – First Control (Approval Threshold)</div>
+      <ul class="step-list">
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Defined MVP scope and selected the first compliance control
+            <div class="step-detail">docs/mvp.md — ETH-GIFT-001: pre-approval required at or above 150 USD</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Built FastAPI evaluation engine with deterministic rule evaluation
+            <div class="step-detail">app/engine.py, app/main.py — POST /evaluate endpoint, structured decision output with severity and confidence</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Created versioned rule catalog for the first control
+            <div class="step-detail">data/rules/approval_thresholds.json — control metadata including threshold, scope, and required approver role</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Added local SQLite audit store with append-only history
+            <div class="step-detail">app/storage.py — every decision and review event is persisted; backward-compatible deserialization for older rows</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Created sample request payloads for manual testing
+            <div class="step-detail">examples/transaction_compliant.json, examples/transaction_missing_approval.json</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Phase 3 -->
+    <h2>Phase 3</h2>
+    <div class="phase">
+      <div class="phase-title">MVP Build – Second Control &amp; Multi-Control Engine</div>
+      <ul class="step-list">
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Added second compliance control (evidence / receipt requirement)
+            <div class="step-detail">ETH-GIFT-002: receipt required at or above 75 USD — data/rules/expense_receipts.json</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Refactored engine to support control_id-based rule selection
+            <div class="step-detail">app/engine.py — loads rule catalog, selects control by control_id, evaluates deterministically</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Extended API for rule catalog inspection
+            <div class="step-detail">GET /rules, GET /rules/current, GET /rules/{control_id}</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Added sample payloads for the expense receipt control
+            <div class="step-detail">examples/expense_receipt_compliant.json, examples/expense_receipt_missing.json</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Phase 4 -->
+    <h2>Phase 4</h2>
+    <div class="phase">
+      <div class="phase-title">Human Review Workflow</div>
+      <ul class="step-list">
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Built active review queue with assignment and in-review state transitions
+            <div class="step-detail">GET /reviews/queue — review_status, assigned_reviewer_id, assigned_at, review_started_at</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Implemented full review lifecycle: assign → start → submit final disposition
+            <div class="step-detail">POST /reviews/{case_id}/assign, /start, /reviews/{case_id} — completed cases leave the active queue</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Synchronized final reviewer outcome back into stored decision records
+            <div class="step-detail">final_reviewer_outcome and final_reviewed_at fields updated on submission</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Added review queue volume and SLA-style aging metrics
+            <div class="step-detail">GET /reviews/metrics — queue count and aging distribution for active cases</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Created sample payloads for review assignment and submission
+            <div class="step-detail">examples/review_assignment.json, examples/review_submission.json</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Phase 5 -->
+    <h2>Phase 5</h2>
+    <div class="phase">
+      <div class="phase-title">Access Control, Reporting &amp; Test Coverage</div>
+      <ul class="step-list">
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Added header-based role-based access control (RBAC) on sensitive endpoints
+            <div class="step-detail">X-User-Id and X-User-Role headers required; roles: employee, compliance_analyst, compliance_manager, auditor</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Restricted review management actions by role
+            <div class="step-detail">Only compliance_manager can assign; only the assigned reviewer can start or submit their own review</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Added management reporting endpoint
+            <div class="step-detail">GET /reports/summary — counts for decisions, active reviews, completed reviews, and overrides</div>
+          </div>
+        </li>
+        <li class="done">
+          <span class="badge done">Done</span>
+          <div class="step-text">
+            Built pytest API test suite covering the full protected workflow
+            <div class="step-detail">tests/test_api.py — auth checks, both controls, and full review lifecycle coverage</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Next Steps -->
+    <h2>Next Steps</h2>
+    <div class="phase">
+      <div class="phase-title">Planned Build Direction</div>
+      <ul class="step-list">
+        <li class="pending">
+          <span class="badge pending">Next</span>
+          <div class="step-text">
+            Design the vendor invoice review process as the second recurring workflow
+            <div class="step-detail">Reuse the same intake → evaluate → route → human review → audit pattern for accounts payable and procurement controls</div>
+          </div>
+        </li>
+        <li class="pending">
+          <span class="badge pending">Next</span>
+          <div class="step-text">
+            Add a third rule catalog and extend rule-selection logic for the new domain
+            <div class="step-detail">Invoice controls: PO matching, duplicate detection, approval authority, payment terms compliance</div>
+          </div>
+        </li>
+        <li class="pending">
+          <span class="badge pending">Next</span>
+          <div class="step-text">
+            Align README and docs with the completed multi-control implementation
+            <div class="step-detail">Confirmed in session bookmark — docs update was the final remaining item from the multi-control refactor</div>
+          </div>
+        </li>
+        <li class="pending">
+          <span class="badge pending">Next</span>
+          <div class="step-text">
+            Extend SLA and aging metrics for reviewer workload and case age reporting
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="note">
+      The current build demonstrates a working human-in-the-loop compliance pattern: deterministic rule evaluation, structured decision output, a full reviewer lifecycle, role-based access, and an append-only audit trail. The next phase extends this pattern to a second compliance domain.
+    </div>
+
+  </main>
+</body>
+</html>
