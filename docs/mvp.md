@@ -64,6 +64,36 @@ Typical issues the agent would watch for include:
 - `GET /reviews/{case_id}` returns the stored reviewer action for audit lookup
 - reviewer outcomes support approval, rejection, and explicit override capture
 
+## Workflow Map
+
+The full swimlane is documented in `docs/workflow_swimlane.md`.
+
+### Step By Step Flow
+
+1. Trigger: an employee submits a gifts or hospitality case payload.
+2. Agent action: the system validates and normalizes the payload.
+3. Agent action: the system loads the selected control by `control_id`.
+4. Agent action: deterministic policy checks run and produce a structured decision record.
+5. Decision point: if compliant with no review requirement, the case auto-closes.
+6. Decision point: if non-compliant, insufficient evidence, or human review required, the case enters the review queue.
+7. Human oversight: a compliance manager assigns a reviewer.
+8. Human oversight: the assigned reviewer starts review.
+9. Human oversight: the reviewer submits final adjudication and notes.
+10. Final output: the system persists final decision and review outcome, then updates queue and summary metrics.
+
+### Human Oversight Decision Points
+
+- assignment gate: only `compliance_manager` can assign review ownership
+- start gate: only the authenticated assigned reviewer can start review work
+- adjudication gate: a human reviewer sets final decision and disposition notes
+- exception gate: ambiguous policy-scope or evidence issues are explicitly routed to human review
+
+### Dependencies
+
+- data sources: intake payload, control catalogs, approval evidence, receipt evidence, persisted decision and review records
+- permissions: `X-User-Id` and `X-User-Role` headers with role-based checks across review actions
+- system access: API endpoints, SQLite audit store, and append-only decision/review history tables
+
 ## Why This Is a Real Ethics and Compliance Use Case
 
 - gifts and hospitality is a common anti-bribery and conflict-of-interest workflow handled by compliance teams
@@ -79,7 +109,7 @@ Typical issues the agent would watch for include:
 - verified: queue metrics load successfully after adding backward-compatible deserialization for legacy audit rows
 - verified: role-based access checks reject unauthorized review actions
 - verified: audit history captures each decision lifecycle step without losing the latest case state
-- verified: focused API tests pass for auth, reporting, and review completion
+- verified: focused API tests pass for auth, reporting, review completion, receipt-evidence control behavior, review-state metrics segmentation, and SLA breach counting
 
 ## Immediate Next Build Step
 

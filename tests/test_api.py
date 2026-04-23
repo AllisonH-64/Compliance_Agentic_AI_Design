@@ -1,10 +1,11 @@
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.storage import get_db_path, set_db_path
+from app.storage import get_db_path, get_decision, save_decision, set_db_path
 
 
 def _auth_headers(user_id: str, role: str) -> dict[str, str]:
@@ -145,3 +146,101 @@ def test_reports_summary_counts_completed_reviews_and_overrides(tmp_path: Path) 
     assert payload["completed_review_count"] == 1
     assert payload["active_review_count"] == 0
     assert payload["override_count"] == 1
+
+
+def test_evaluate_receipt_control_requires_receipt_evidence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "receipt.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-receipt-1",
+            "transaction_id": "txn-receipt-1",
+            "control_id": "ETH-GIFT-002",
+            "amount": 120,
+            "currency": "USD",
+            "requestor_role": "employee",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["review_required"] is True
+    assert payload["review_status"] == "pending"
+    assert payload["rule_metadata"]["control_id"] == "ETH-GIFT-002"
+
+
+def test_review_metrics_counts_pending_assigned_and_in_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "metrics.db")
+    client = TestClient(app)
+
+    _seed_review_case(client, case_id="case-metrics-pending")
+    _seed_review_case(client, case_id="case-metrics-assigned")
+    _seed_review_case(client, case_id="case-metrics-in-review")
+
+    assign_response = client.post(
+        "/reviews/case-metrics-assigned/assign",
+        headers=_auth_headers("manager-1", "compliance_manager"),
+        json={"reviewer_id": "analyst-1"},
+    )
+    assert assign_response.status_code == 200
+
+    assign_and_start_response = client.post(
+        "/reviews/case-metrics-in-review/assign",
+        headers=_auth_headers("manager-1", "compliance_manager"),
+        json={"reviewer_id": "analyst-1"},
+    )
+    assert assign_and_start_response.status_code == 200
+
+    start_response = client.post(
+        "/reviews/case-metrics-in-review/start",
+        headers=_auth_headers("analyst-1", "compliance_analyst"),
+        json={"reviewer_id": "analyst-1"},
+    )
+    assert start_response.status_code == 200
+
+    metrics_response = client.get(
+        "/reviews/metrics",
+        headers=_auth_headers("auditor-1", "auditor"),
+    )
+
+    assert metrics_response.status_code == 200
+    payload = metrics_response.json()
+    assert payload["active_review_count"] == 3
+    assert payload["pending_count"] == 1
+    assert payload["assigned_count"] == 1
+    assert payload["in_review_count"] == 1
+    assert payload["breached_sla_count"] == 0
+    assert payload["average_queue_age_hours"] >= 0
+    assert payload["oldest_queue_age_hours"] >= 0
+
+
+def test_review_metrics_counts_sla_breach_for_aged_case(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "metrics-sla.db")
+    client = TestClient(app)
+
+    _seed_review_case(client, case_id="case-metrics-sla")
+
+    decision = get_decision("case-metrics-sla")
+    assert decision is not None
+
+    aged_decision = decision.model_copy(
+        update={
+            "evaluated_at": (datetime.now(UTC) - timedelta(hours=30)).isoformat(),
+        }
+    )
+    save_decision(aged_decision, event_type="decision_backdated_for_test", actor_id="test", actor_role="test")
+
+    metrics_response = client.get(
+        "/reviews/metrics",
+        headers=_auth_headers("auditor-1", "auditor"),
+    )
+
+    assert metrics_response.status_code == 200
+    payload = metrics_response.json()
+    assert payload["active_review_count"] == 1
+    assert payload["breached_sla_count"] == 1
+    assert payload["oldest_queue_age_hours"] >= 30
