@@ -31,8 +31,10 @@ Typical issues the agent would watch for include:
 - `app/engine.py` loads the rule catalog, selects the control by `control_id`, and evaluates the case deterministically
 - `app/models.py` defines the request and response schema
 - `app/storage.py` persists decision records in a local SQLite audit store and appends immutable history rows for lifecycle events
+- `requirements.txt` includes `PyJWT` for signed bearer token validation on protected endpoints
 - `data/rules/approval_thresholds.json` stores the gifts-and-hospitality pre-approval control metadata
 - `data/rules/expense_receipts.json` stores the gifts-and-hospitality evidence control metadata
+- `docs/governance_operating_model.md` defines operating governance, KPI thresholds, and change control responsibilities
 - `examples/` contains sample payloads for manual testing
 - `tests/test_api.py` covers the protected API workflow end to end
 
@@ -48,10 +50,13 @@ Typical issues the agent would watch for include:
 
 ## Access Control And Reporting
 
-- protected endpoints require `X-User-Id` and `X-User-Role` headers
+- protected endpoints require `Authorization: Bearer <token>` with signed role claims
 - allowed roles are `employee`, `compliance_analyst`, `compliance_manager`, and `auditor`
 - only `compliance_manager` can assign reviews
 - only authenticated reviewers can start or submit their own review actions
+- legacy header auth can be temporarily enabled only via `COMPLIANCE_ALLOW_INSECURE_HEADERS=true`
+- token verification supports key-id based secret selection via `COMPLIANCE_AUTH_KEYS_JSON`
+- optional `COMPLIANCE_AUTH_ISSUER` and `COMPLIANCE_AUTH_AUDIENCE` settings enforce issuer and audience claims
 - `GET /reports/summary` provides management counts for decisions, active reviews, completed reviews, and overrides
 
 ## Human Review Workflow
@@ -109,10 +114,17 @@ The full swimlane is documented in `docs/workflow_swimlane.md`.
 - verified: queue metrics load successfully after adding backward-compatible deserialization for legacy audit rows
 - verified: role-based access checks reject unauthorized review actions
 - verified: audit history captures each decision lifecycle step without losing the latest case state
-- verified: focused API tests pass for auth, reporting, review completion, receipt-evidence control behavior, review-state metrics segmentation, and SLA breach counting
+- verified: contextual risk-signal inputs are evaluated and persisted in decision records with escalation metadata
+- verified: compliant low-risk cases auto-close while compliant high-risk cases route to mandatory human review
+- verified: completed reviews can be reopened into a new cycle with captured reopen reason and preserved decision history
+- verified: review queue metrics and summary reporting include risk-band segmentation and reopened-case reporting
+- verified: signed bearer token auth is enforced by default and validated in API tests
+- verified: token issuer/audience claim checks and key-id trust selection are covered by API tests
+- verified: focused API tests pass for auth, reporting, reopen lifecycle behavior, review completion, receipt-evidence control behavior, risk escalation behavior, review-state metrics segmentation, and SLA breach counting
 
 ## Immediate Next Build Step
 
-- decide how reopened cases should interact with prior review records in the audit store
-- add recipient and context risk signals such as government official status, country, and event purpose
+- implement `docs/risk_signals_and_escalation_rules.md` in code, starting with new case-schema risk fields and deterministic signal evaluation
+- add escalation routing rules that combine baseline control outcomes with risk bands
+- finalize reopened-case cycle handling so prior reviewer outcomes remain immutable in history
 - replace header-only role assertions with stronger authentication and identity binding

@@ -6,6 +6,10 @@ from app.models import (
     DEFAULT_CONTROL_ID,
     DecisionRecord,
     DecisionState,
+    EventContext,
+    MarketRiskLevel,
+    RecipientType,
+    RiskBand,
     ReviewQueueMetrics,
     ReviewStatus,
     RuleMetadata,
@@ -15,6 +19,8 @@ from app.models import (
 
 RULES_DIR = Path(__file__).resolve().parents[1] / "data" / "rules"
 DEFAULT_SLA_HOURS = 24.0
+RISK_CONTEXT_REQUIRED_AMOUNT_FLOOR = 100.0
+RISK_POLICY_VERSION = "risk-signals-v1"
 
 
 def load_rules() -> list[RuleMetadata]:
@@ -74,6 +80,12 @@ def _evaluate_large_transaction_approval(
             confidence_score=0.97,
             recommended_action="Close the case as compliant.",
             evidence_references=evidence_references,
+            risk_band=RiskBand.LOW,
+            risk_score=0.1,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="auto_close",
+            escalation_policy_version=RISK_POLICY_VERSION,
             review_required=False,
             review_status=ReviewStatus.NOT_REQUIRED,
             rule_metadata=rule,
@@ -92,6 +104,12 @@ def _evaluate_large_transaction_approval(
             confidence_score=0.9,
             recommended_action="Route to human review and request the missing approval evidence.",
             evidence_references=evidence_references,
+            risk_band=RiskBand.MEDIUM,
+            risk_score=0.7,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="queue_for_review",
+            escalation_policy_version=RISK_POLICY_VERSION,
             review_required=True,
             review_status=ReviewStatus.PENDING,
             rule_metadata=rule,
@@ -113,6 +131,12 @@ def _evaluate_large_transaction_approval(
             confidence_score=0.95,
             recommended_action="Block fulfillment and route the case to a compliance analyst.",
             evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.88,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="queue_for_review",
+            escalation_policy_version=RISK_POLICY_VERSION,
             review_required=True,
             review_status=ReviewStatus.PENDING,
             rule_metadata=rule,
@@ -131,6 +155,12 @@ def _evaluate_large_transaction_approval(
             confidence_score=0.84,
             recommended_action="Send to human review to validate delegated approval authority.",
             evidence_references=evidence_references,
+            risk_band=RiskBand.MEDIUM,
+            risk_score=0.68,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="queue_for_review",
+            escalation_policy_version=RISK_POLICY_VERSION,
             review_required=True,
             review_status=ReviewStatus.PENDING,
             rule_metadata=rule,
@@ -148,6 +178,12 @@ def _evaluate_large_transaction_approval(
         confidence_score=0.96,
         recommended_action="Close the case as compliant and retain the approval evidence in the audit trail.",
         evidence_references=evidence_references,
+        risk_band=RiskBand.LOW,
+        risk_score=0.2,
+        triggered_signal_ids=[],
+        signal_rationale=[],
+        escalation_decision="auto_close",
+        escalation_policy_version=RISK_POLICY_VERSION,
         review_required=False,
         review_status=ReviewStatus.NOT_REQUIRED,
         rule_metadata=rule,
@@ -174,6 +210,12 @@ def _evaluate_expense_receipt(
             confidence_score=0.78,
             recommended_action="Route to human review to confirm whether this case belongs to the receipt evidence policy scope.",
             evidence_references=evidence_references,
+            risk_band=RiskBand.MEDIUM,
+            risk_score=0.45,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="queue_for_review",
+            escalation_policy_version=RISK_POLICY_VERSION,
             review_required=True,
             review_status=ReviewStatus.PENDING,
             rule_metadata=rule,
@@ -192,6 +234,12 @@ def _evaluate_expense_receipt(
             confidence_score=0.97,
             recommended_action="Close the case as compliant.",
             evidence_references=evidence_references,
+            risk_band=RiskBand.LOW,
+            risk_score=0.08,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="auto_close",
+            escalation_policy_version=RISK_POLICY_VERSION,
             review_required=False,
             review_status=ReviewStatus.NOT_REQUIRED,
             rule_metadata=rule,
@@ -210,6 +258,12 @@ def _evaluate_expense_receipt(
             confidence_score=0.91,
             recommended_action="Route to human review and request the missing receipt evidence.",
             evidence_references=evidence_references,
+            risk_band=RiskBand.MEDIUM,
+            risk_score=0.72,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="queue_for_review",
+            escalation_policy_version=RISK_POLICY_VERSION,
             review_required=True,
             review_status=ReviewStatus.PENDING,
             rule_metadata=rule,
@@ -230,6 +284,12 @@ def _evaluate_expense_receipt(
             confidence_score=0.94,
             recommended_action="Hold the case and route it to a compliance analyst.",
             evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.8,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="queue_for_review",
+            escalation_policy_version=RISK_POLICY_VERSION,
             review_required=True,
             review_status=ReviewStatus.PENDING,
             rule_metadata=rule,
@@ -247,9 +307,141 @@ def _evaluate_expense_receipt(
         confidence_score=0.95,
         recommended_action="Close the case as compliant and retain the receipt reference in the audit trail.",
         evidence_references=evidence_references,
+        risk_band=RiskBand.LOW,
+        risk_score=0.18,
+        triggered_signal_ids=[],
+        signal_rationale=[],
+        escalation_decision="auto_close",
+        escalation_policy_version=RISK_POLICY_VERSION,
         review_required=False,
         review_status=ReviewStatus.NOT_REQUIRED,
         rule_metadata=rule,
+    )
+
+
+def _risk_band_from_score(score: float) -> RiskBand:
+    if score >= 0.9:
+        return RiskBand.CRITICAL
+    if score >= 0.65:
+        return RiskBand.HIGH
+    if score >= 0.35:
+        return RiskBand.MEDIUM
+    return RiskBand.LOW
+
+
+def _compute_risk_signals(transaction_case: TransactionCase) -> tuple[float, list[str], list[str]]:
+    risk_score = 0.0
+    signal_ids: list[str] = []
+    rationale: list[str] = []
+
+    if transaction_case.recipient_type == RecipientType.GOVERNMENT_OFFICIAL:
+        risk_score = max(risk_score, 0.85)
+        signal_ids.append("SIG-GOV-OFFICIAL")
+        rationale.append("Recipient is a government official, which creates elevated anti-bribery exposure.")
+
+    if transaction_case.recipient_type == RecipientType.STATE_OWNED_ENTITY:
+        risk_score = max(risk_score, 0.7)
+        signal_ids.append("SIG-SOE-ENTITY")
+        rationale.append("Recipient is a state-owned entity and requires elevated compliance scrutiny.")
+
+    if transaction_case.market_risk_level == MarketRiskLevel.HIGH:
+        risk_score += 0.35
+        signal_ids.append("SIG-HIGH-RISK-MARKET")
+        rationale.append("Interaction occurred in a high-risk market.")
+
+    if transaction_case.prior_interactions_12m >= 5:
+        risk_score += 0.2
+        signal_ids.append("SIG-REPEAT-INTERACTIONS")
+        rationale.append("High interaction frequency suggests potential relationship influence risk.")
+
+    if transaction_case.event_context in (EventContext.CONTRACT_NEGOTIATION, EventContext.ACTIVE_TENDER):
+        risk_score = max(risk_score, 0.75)
+        signal_ids.append("SIG-SENSITIVE-TIMING")
+        rationale.append("Event context is tied to active commercial decision timing.")
+
+    if (
+        transaction_case.amount >= RISK_CONTEXT_REQUIRED_AMOUNT_FLOOR
+        and (
+            transaction_case.recipient_type is None
+            or transaction_case.country_code is None
+            or transaction_case.event_context is None
+        )
+    ):
+        risk_score += 0.25
+        signal_ids.append("SIG-MISSING-CONTEXT")
+        rationale.append("Required contextual risk fields are missing for a higher-value submission.")
+
+    if transaction_case.business_purpose is None or not transaction_case.business_purpose.strip():
+        risk_score += 0.1
+        signal_ids.append("SIG-WEAK-BUSINESS-PURPOSE")
+        rationale.append("Business purpose is missing or too weak for reliable policy interpretation.")
+
+    # Keep scores bounded and deterministic for auditability.
+    risk_score = min(risk_score, 1.0)
+    return risk_score, signal_ids, rationale
+
+
+def _apply_risk_escalation(transaction_case: TransactionCase, baseline_decision: DecisionRecord) -> DecisionRecord:
+    risk_score, signal_ids, rationale = _compute_risk_signals(transaction_case)
+    risk_band = _risk_band_from_score(risk_score)
+
+    updated_evidence = list(baseline_decision.evidence_references)
+    updated_evidence.extend([f"risk_signal:{signal_id}" for signal_id in signal_ids])
+
+    escalation_decision = "auto_close"
+
+    if baseline_decision.decision in (
+        DecisionState.NON_COMPLIANT,
+        DecisionState.INSUFFICIENT_EVIDENCE,
+        DecisionState.HUMAN_REVIEW_REQUIRED,
+    ):
+        escalation_decision = "queue_for_review"
+        return baseline_decision.model_copy(
+            update={
+                "risk_band": risk_band,
+                "risk_score": risk_score,
+                "triggered_signal_ids": signal_ids,
+                "signal_rationale": rationale,
+                "escalation_decision": escalation_decision,
+                "escalation_policy_version": RISK_POLICY_VERSION,
+                "evidence_references": updated_evidence,
+            }
+        )
+
+    if risk_band in (RiskBand.HIGH, RiskBand.CRITICAL):
+        escalation_decision = "queue_for_review"
+        return baseline_decision.model_copy(
+            update={
+                "decision": DecisionState.HUMAN_REVIEW_REQUIRED,
+                "reasoning_summary": (
+                    "Deterministic controls passed, but contextual risk signals require mandatory human review."
+                ),
+                "recommended_action": "Route to compliance analyst review due to elevated contextual risk signals.",
+                "review_required": True,
+                "review_status": ReviewStatus.PENDING,
+                "risk_band": risk_band,
+                "risk_score": risk_score,
+                "triggered_signal_ids": signal_ids,
+                "signal_rationale": rationale,
+                "escalation_decision": escalation_decision,
+                "escalation_policy_version": RISK_POLICY_VERSION,
+                "evidence_references": updated_evidence,
+            }
+        )
+
+    if risk_band == RiskBand.MEDIUM:
+        escalation_decision = "monitor_only"
+
+    return baseline_decision.model_copy(
+        update={
+            "risk_band": risk_band,
+            "risk_score": risk_score,
+            "triggered_signal_ids": signal_ids,
+            "signal_rationale": rationale,
+            "escalation_decision": escalation_decision,
+            "escalation_policy_version": RISK_POLICY_VERSION,
+            "evidence_references": updated_evidence,
+        }
     )
 
 
@@ -258,16 +450,19 @@ def evaluate_transaction_case(transaction_case: TransactionCase) -> DecisionReco
     evaluated_at = datetime.now(UTC).isoformat()
 
     if rule.control_domain == "transaction_approval":
-        return _evaluate_large_transaction_approval(transaction_case, rule, evaluated_at)
+        baseline_decision = _evaluate_large_transaction_approval(transaction_case, rule, evaluated_at)
+        return _apply_risk_escalation(transaction_case, baseline_decision)
 
     if rule.control_domain == "expense_receipt":
-        return _evaluate_expense_receipt(transaction_case, rule, evaluated_at)
+        baseline_decision = _evaluate_expense_receipt(transaction_case, rule, evaluated_at)
+        return _apply_risk_escalation(transaction_case, baseline_decision)
 
     raise ValueError(f"Unsupported control_domain: {rule.control_domain}")
 
 
 def calculate_review_queue_metrics(decisions: list[DecisionRecord], sla_target_hours: float = DEFAULT_SLA_HOURS) -> ReviewQueueMetrics:
     active_decisions = [decision for decision in decisions if decision.review_required]
+    zero_band_counts = {band: 0 for band in RiskBand}
 
     if not active_decisions:
         return ReviewQueueMetrics(
@@ -275,7 +470,10 @@ def calculate_review_queue_metrics(decisions: list[DecisionRecord], sla_target_h
             pending_count=0,
             assigned_count=0,
             in_review_count=0,
+            reopened_count=0,
             breached_sla_count=0,
+            active_by_risk_band=zero_band_counts,
+            breached_sla_by_risk_band=zero_band_counts,
             average_queue_age_hours=0.0,
             oldest_queue_age_hours=0.0,
             sla_target_hours=sla_target_hours,
@@ -284,21 +482,28 @@ def calculate_review_queue_metrics(decisions: list[DecisionRecord], sla_target_h
     now = datetime.now(UTC)
     queue_ages_hours: list[float] = []
     breached_sla_count = 0
+    active_by_risk_band = {band: 0 for band in RiskBand}
+    breached_sla_by_risk_band = {band: 0 for band in RiskBand}
 
     for decision in active_decisions:
         started_at = datetime.fromisoformat(decision.evaluated_at)
         age_hours = (now - started_at).total_seconds() / 3600
         queue_ages_hours.append(age_hours)
+        active_by_risk_band[decision.risk_band] += 1
 
         if age_hours > sla_target_hours:
             breached_sla_count += 1
+            breached_sla_by_risk_band[decision.risk_band] += 1
 
     return ReviewQueueMetrics(
         active_review_count=len(active_decisions),
         pending_count=sum(1 for decision in active_decisions if decision.review_status == ReviewStatus.PENDING),
         assigned_count=sum(1 for decision in active_decisions if decision.review_status == ReviewStatus.ASSIGNED),
         in_review_count=sum(1 for decision in active_decisions if decision.review_status == ReviewStatus.IN_REVIEW),
+        reopened_count=sum(1 for decision in active_decisions if decision.review_status == ReviewStatus.REOPENED),
         breached_sla_count=breached_sla_count,
+        active_by_risk_band=active_by_risk_band,
+        breached_sla_by_risk_band=breached_sla_by_risk_band,
         average_queue_age_hours=round(sum(queue_ages_hours) / len(queue_ages_hours), 2),
         oldest_queue_age_hours=round(max(queue_ages_hours), 2),
         sla_target_hours=sla_target_hours,

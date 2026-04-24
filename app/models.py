@@ -24,6 +24,7 @@ class ReviewStatus(str, Enum):
     PENDING = "pending"
     ASSIGNED = "assigned"
     IN_REVIEW = "in_review"
+    REOPENED = "reopened"
     COMPLETED = "completed"
 
 
@@ -32,6 +33,44 @@ class UserRole(str, Enum):
     COMPLIANCE_ANALYST = "compliance_analyst"
     COMPLIANCE_MANAGER = "compliance_manager"
     AUDITOR = "auditor"
+
+
+class RecipientType(str, Enum):
+    EMPLOYEE = "employee"
+    CUSTOMER = "customer"
+    VENDOR = "vendor"
+    GOVERNMENT_OFFICIAL = "government_official"
+    STATE_OWNED_ENTITY = "state_owned_entity"
+    UNKNOWN = "unknown"
+
+
+class MarketRiskLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class EventContext(str, Enum):
+    CONTRACT_NEGOTIATION = "contract_negotiation"
+    ACTIVE_TENDER = "active_tender"
+    POST_AWARD = "post_award"
+    RELATIONSHIP_MANAGEMENT = "relationship_management"
+    OTHER = "other"
+
+
+class RiskBand(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class ReopenReason(str, Enum):
+    NEW_EVIDENCE = "new_evidence"
+    POLICY_UPDATE = "policy_update"
+    APPEAL = "appeal"
+    AUDIT_FOLLOWUP = "audit_followup"
+    OTHER = "other"
 
 
 class ApprovalRecord(BaseModel):
@@ -62,6 +101,45 @@ class TransactionCase(BaseModel):
         default=None,
         description="Receipt evidence attached to the case when required by the selected control",
     )
+    recipient_type: RecipientType | None = Field(
+        default=None,
+        description="Recipient classification for contextual risk scoring",
+    )
+    country_code: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=2,
+        description="ISO country code where the interaction occurred",
+    )
+    market_risk_level: MarketRiskLevel | None = Field(
+        default=None,
+        description="Compliance-managed geography risk tier",
+    )
+    business_purpose: str | None = Field(
+        default=None,
+        description="Business purpose or justification for the interaction",
+    )
+    prior_interactions_12m: int = Field(
+        default=0,
+        ge=0,
+        description="Count of prior interactions with the same recipient in the last 12 months",
+    )
+    exception_reference: str | None = Field(
+        default=None,
+        description="Optional approved exception or waiver identifier",
+    )
+    event_context: EventContext | None = Field(
+        default=None,
+        description="Business context in which the spend occurred",
+    )
+    submitted_by_role: str | None = Field(
+        default=None,
+        description="Submitting employee role used for segregation-of-duties checks",
+    )
+    beneficiary_identifier: str | None = Field(
+        default=None,
+        description="Recipient or organization identifier used for pattern detection",
+    )
 
 
 class RuleMetadata(BaseModel):
@@ -86,6 +164,14 @@ class DecisionRecord(BaseModel):
     confidence_score: float = Field(..., ge=0, le=1)
     recommended_action: str
     evidence_references: list[str]
+    risk_band: RiskBand = RiskBand.LOW
+    risk_score: float = Field(default=0.0, ge=0, le=1)
+    triggered_signal_ids: list[str] = Field(default_factory=list)
+    signal_rationale: list[str] = Field(default_factory=list)
+    escalation_decision: str = "auto_close"
+    escalation_policy_version: str = "risk-signals-v1"
+    review_cycle_id: int = Field(default=1, ge=1)
+    reopen_reason: ReopenReason | None = None
     review_required: bool
     review_status: ReviewStatus
     assigned_reviewer_id: str | None = None
@@ -111,6 +197,11 @@ class ReviewSubmission(BaseModel):
     notes: str = Field(..., min_length=1, description="Reviewer notes explaining the decision")
 
 
+class ReviewReopen(BaseModel):
+    reason: ReopenReason = Field(..., description="Reason for reopening a completed review cycle")
+    notes: str = Field(..., min_length=1, description="Context for why the case is being reopened")
+
+
 class ReviewRecord(BaseModel):
     case_id: str
     reviewer_id: str
@@ -130,7 +221,10 @@ class ReviewQueueMetrics(BaseModel):
     pending_count: int
     assigned_count: int
     in_review_count: int
+    reopened_count: int
     breached_sla_count: int
+    active_by_risk_band: dict[RiskBand, int]
+    breached_sla_by_risk_band: dict[RiskBand, int]
     average_queue_age_hours: float
     oldest_queue_age_hours: float
     sla_target_hours: float
@@ -146,3 +240,7 @@ class ComplianceSummaryReport(BaseModel):
     active_review_count: int
     completed_review_count: int
     override_count: int
+    reopened_case_count: int
+    decision_count_by_risk_band: dict[RiskBand, int]
+    active_review_count_by_risk_band: dict[RiskBand, int]
+    reopen_reason_counts: dict[ReopenReason, int]

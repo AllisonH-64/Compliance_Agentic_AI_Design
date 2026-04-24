@@ -1,8 +1,12 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import json
+import os
 from typing import Annotated
 
+import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from jwt import InvalidTokenError
 
 from app.engine import calculate_review_queue_metrics, evaluate_transaction_case, load_rule, load_rules
 from app.models import (
@@ -10,10 +14,14 @@ from app.models import (
     DEFAULT_CONTROL_ID,
     DecisionRecord,
     DecisionState,
+    ReopenReason,
     ReviewAssignment,
     ReviewQueueMetrics,
     ReviewQueueItem,
+    ReviewReopen,
     ReviewRecord,
+    ReviewerOutcome,
+    RiskBand,
     ReviewStart,
     ReviewStatus,
     RuleMetadata,
@@ -43,6 +51,131 @@ app = FastAPI(
 init_db()
 
 
+AUTH_ALGORITHM = "HS256"
+AUTH_SECRET_ENV_VAR = "COMPLIANCE_AUTH_SECRET"
+AUTH_KEYS_JSON_ENV_VAR = "COMPLIANCE_AUTH_KEYS_JSON"
+AUTH_ISSUER_ENV_VAR = "COMPLIANCE_AUTH_ISSUER"
+AUTH_AUDIENCE_ENV_VAR = "COMPLIANCE_AUTH_AUDIENCE"
+ALLOW_INSECURE_HEADERS_ENV_VAR = "COMPLIANCE_ALLOW_INSECURE_HEADERS"
+
+
+def _get_auth_secret() -> str:
+    secret = os.getenv(AUTH_SECRET_ENV_VAR)
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Missing {AUTH_SECRET_ENV_VAR} environment configuration",
+        )
+
+    return secret
+
+
+def _allow_insecure_headers() -> bool:
+    value = os.getenv(ALLOW_INSECURE_HEADERS_ENV_VAR, "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _get_auth_keys() -> dict[str, str]:
+    raw_keys = os.getenv(AUTH_KEYS_JSON_ENV_VAR)
+    if not raw_keys:
+        return {}
+
+    try:
+        parsed_keys = json.loads(raw_keys)
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Invalid JSON in {AUTH_KEYS_JSON_ENV_VAR}",
+        ) from error
+
+    if not isinstance(parsed_keys, dict) or not parsed_keys:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{AUTH_KEYS_JSON_ENV_VAR} must be a non-empty object",
+        )
+
+    normalized_keys: dict[str, str] = {}
+    for key_id, key_secret in parsed_keys.items():
+        if not isinstance(key_id, str) or not key_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"{AUTH_KEYS_JSON_ENV_VAR} contains invalid key identifier",
+            )
+        if not isinstance(key_secret, str) or not key_secret:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"{AUTH_KEYS_JSON_ENV_VAR} contains invalid secret value",
+            )
+        normalized_keys[key_id] = key_secret
+
+    return normalized_keys
+
+
+def _select_auth_secret(token: str) -> str:
+    auth_keys = _get_auth_keys()
+    if auth_keys:
+        try:
+            unverified_header = jwt.get_unverified_header(token)
+        except InvalidTokenError as error:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token") from error
+
+        key_id = unverified_header.get("kid")
+        if not isinstance(key_id, str) or not key_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Bearer token missing key identifier",
+            )
+
+        secret = auth_keys.get(key_id)
+        if secret is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Bearer token key identifier is not trusted",
+            )
+
+        return secret
+
+    return _get_auth_secret()
+
+
+def _decode_token_claims(token: str) -> dict:
+    secret = _select_auth_secret(token)
+    issuer = os.getenv(AUTH_ISSUER_ENV_VAR)
+    audience = os.getenv(AUTH_AUDIENCE_ENV_VAR)
+
+    decode_options = {
+        "verify_signature": True,
+        "verify_exp": True,
+        "verify_sub": True,
+        "verify_iss": bool(issuer),
+        "verify_aud": bool(audience),
+    }
+
+    try:
+        return jwt.decode(
+            token,
+            secret,
+            algorithms=[AUTH_ALGORITHM],
+            issuer=issuer,
+            audience=audience,
+            options=decode_options,
+        )
+    except InvalidTokenError as error:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token") from error
+
+
+def _parse_bearer_token(authorization: str) -> str:
+    auth_scheme, _, token = authorization.partition(" ")
+
+    if auth_scheme.lower() != "bearer" or not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header must use Bearer token format",
+        )
+
+    return token
+
+
 @dataclass(frozen=True)
 class AuthContext:
     user_id: str
@@ -50,9 +183,36 @@ class AuthContext:
 
 
 def get_current_user(
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     x_user_id: Annotated[str | None, Header(alias="X-User-Id")] = None,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> AuthContext:
+    if authorization is not None:
+        token = _parse_bearer_token(authorization)
+        claims = _decode_token_claims(token)
+
+        user_id = claims.get("sub")
+        role_claim = claims.get("role")
+
+        if not isinstance(user_id, str) or not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing valid subject claim")
+
+        if not isinstance(role_claim, str) or not role_claim:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing valid role claim")
+
+        try:
+            role = UserRole(role_claim)
+        except ValueError as error:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid user role") from error
+
+        return AuthContext(user_id=user_id, role=role)
+
+    if not _allow_insecure_headers():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization bearer token",
+        )
+
     if x_user_id is None or x_user_role is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -178,6 +338,18 @@ def get_summary_report(
     ],
 ) -> ComplianceSummaryReport:
     decisions = list_decisions()
+    decision_count_by_risk_band = {band: 0 for band in RiskBand}
+    active_review_count_by_risk_band = {band: 0 for band in RiskBand}
+    reopen_reason_counts = {reason: 0 for reason in ReopenReason}
+
+    for decision in decisions:
+        decision_count_by_risk_band[decision.risk_band] += 1
+
+        if decision.review_required:
+            active_review_count_by_risk_band[decision.risk_band] += 1
+
+        if decision.reopen_reason is not None:
+            reopen_reason_counts[decision.reopen_reason] += 1
 
     return ComplianceSummaryReport(
         generated_at=datetime.now(UTC).isoformat(),
@@ -192,7 +364,11 @@ def get_summary_report(
         ),
         active_review_count=sum(1 for decision in decisions if decision.review_required),
         completed_review_count=sum(1 for decision in decisions if decision.review_status == ReviewStatus.COMPLETED),
-        override_count=sum(1 for decision in decisions if decision.final_reviewer_outcome == "overridden"),
+        override_count=sum(1 for decision in decisions if decision.final_reviewer_outcome == ReviewerOutcome.OVERRIDDEN),
+        reopened_case_count=sum(1 for decision in decisions if decision.review_cycle_id > 1),
+        decision_count_by_risk_band=decision_count_by_risk_band,
+        active_review_count_by_risk_band=active_review_count_by_risk_band,
+        reopen_reason_counts=reopen_reason_counts,
     )
 
 
@@ -349,3 +525,43 @@ def submit_review(
         actor_role=current_user.role.value,
     )
     return review_record
+
+
+@app.post("/reviews/{case_id}/reopen", response_model=DecisionRecord)
+def reopen_review(
+    case_id: str,
+    reopen_request: ReviewReopen,
+    current_user: Annotated[AuthContext, Depends(require_roles(UserRole.COMPLIANCE_MANAGER))],
+) -> DecisionRecord:
+    decision_record = get_decision(case_id)
+
+    if decision_record is None:
+        raise HTTPException(status_code=404, detail="Decision record not found")
+
+    if decision_record.review_status != ReviewStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Only completed reviews can be reopened")
+
+    reopened_decision = decision_record.model_copy(
+        update={
+            "decision": DecisionState.HUMAN_REVIEW_REQUIRED,
+            "reasoning_summary": f"Case reopened for additional review: {reopen_request.notes}",
+            "recommended_action": "Review reopened. Reassign and complete a new adjudication cycle.",
+            "review_required": True,
+            "review_status": ReviewStatus.REOPENED,
+            "review_cycle_id": decision_record.review_cycle_id + 1,
+            "reopen_reason": reopen_request.reason,
+            "assigned_reviewer_id": None,
+            "assigned_at": None,
+            "review_started_at": None,
+            "final_reviewer_outcome": None,
+            "final_reviewed_at": None,
+        }
+    )
+
+    save_decision(
+        reopened_decision,
+        event_type="case_reopened",
+        actor_id=current_user.user_id,
+        actor_role=current_user.role.value,
+    )
+    return reopened_decision

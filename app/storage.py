@@ -161,6 +161,14 @@ def _deserialize_decision(payload: str) -> DecisionRecord:
     raw_record.setdefault("assigned_reviewer_id", None)
     raw_record.setdefault("assigned_at", None)
     raw_record.setdefault("review_started_at", None)
+    raw_record.setdefault("risk_band", "low")
+    raw_record.setdefault("risk_score", 0.0)
+    raw_record.setdefault("triggered_signal_ids", [])
+    raw_record.setdefault("signal_rationale", [])
+    raw_record.setdefault("escalation_decision", "auto_close")
+    raw_record.setdefault("escalation_policy_version", "risk-signals-v1")
+    raw_record.setdefault("review_cycle_id", 1)
+    raw_record.setdefault("reopen_reason", None)
 
     return DecisionRecord(**raw_record)
 
