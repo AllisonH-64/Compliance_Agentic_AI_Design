@@ -8,7 +8,7 @@ This document defines how governance is run for the Compliance Agentic AI workfl
 
 Applies to:
 
-- deterministic controls (`ETH-GIFT-001`, `ETH-GIFT-002`)
+- deterministic controls (CONDUCT-HARASSMENT-001, CONDUCT-DISCRIMINATION-001, CONDUCT-CLIENT-001, CONDUCT-INTL-GOV-001)
 - contextual risk-signal logic and escalation routing
 - review lifecycle and reopened-case handling
 - authentication and authorization trust settings

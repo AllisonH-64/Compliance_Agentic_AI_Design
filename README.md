@@ -1,28 +1,30 @@
-# Compliance Agentic AI Design
+# Employee Conduct Compliance Agentic AI
 
-This repository defines a practical concept for an Agentic AI system that supports a real Ethics and Compliance workflow: gifts, meals, entertainment, and travel review. The MVP detects policy breaches, routes ambiguous or high-risk cases to a human analyst, and preserves a defensible audit trail.
+This repository defines a practical framework for an Agentic AI system supporting employee conduct and workplace compliance: harassment, discrimination, client treatment, and international employment governance. The MVP detects policy violations, routes incidents to investigators based on severity, and maintains an auditable record of all compliance decisions and review outcomes.
 
 ## Current status
 
-This repository now contains the design baseline and a FastAPI MVP with two deterministic gifts-and-hospitality controls, contextual risk-signal escalation, human review workflow support, review queue metrics, simple role-based access control, append-only audit history, and a local SQLite audit trail.
+This repository now contains the design foundation and a FastAPI MVP with four conduct-focused compliance controls, severity-based risk escalation, investigation workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
 
 ## Contents
 
 - `docs/architecture.md` - end-to-end architecture and reference implementation design
-- `docs/ethics_workflow.md` - concrete project concept for a gifts and hospitality compliance workflow
+- `docs/ethics_workflow.md` - conduct and employee governance compliance workflow
 - `docs/mvp.md` - first MVP scope and build notes
-- `docs/risk_signals_and_escalation_rules.md` - next-step design for contextual risk signals, escalation logic, and reopened-case lifecycle
-- `docs/governance_operating_model.md` - governance ownership, traceability, KPI thresholds, and assurance cadence
+- `docs/risk_signals_and_escalation_rules.md` - escalation logic and investigation lifecycle
+- `docs/governance_operating_model.md` - governance ownership and assurance cadence
 - `app/` - FastAPI service and deterministic evaluation engine
-- `data/rules/` - versioned rule catalogs for the active controls
-- `examples/` - sample request payloads
+- `data/rules/` - versioned rule catalogs for conduct controls
+- `examples/` - sample incident report payloads
 
 ## Current MVP controls
 
-- `ETH-GIFT-001`: gifts or hospitality spend at or above 150 USD require pre-approval from `compliance_manager`
-- `ETH-GIFT-002`: gifts or hospitality spend at or above 75 USD require receipt evidence in USD scope
-- contextual escalation: compliant baseline outcomes can still be routed to mandatory human review when high-risk signals are present
-- output: structured compliance decision record with severity, confidence, risk metadata, recommended action, and review state
+- `CONDUCT-HARASSMENT-001`: harassment and bullying incidents requiring severity assessment and mandatory investigation for medium/high-risk cases
+- `CONDUCT-DISCRIMINATION-001`: discrimination allegations involving protected characteristics require immediate escalation to HR and Legal
+- `CONDUCT-CLIENT-001`: client treatment and confidentiality breaches evaluated for business impact and reputation risk
+- `CONDUCT-INTL-GOV-001`: international employment law and regulatory compliance issues with jurisdiction-specific escalation
+- severity-based escalation: incidents are classified into risk bands (LOW, MEDIUM, HIGH, CRITICAL) with corresponding escalation actions
+- output: structured compliance decision record with severity scores, investigation recommendations, risk metadata, and review state
 
 ## Run locally
 
@@ -36,7 +38,7 @@ Protected endpoints require bearer authentication:
 - `Authorization: Bearer <signed_token>`
 - required token claims: `sub` (caller identifier) and `role` (`employee`, `compliance_analyst`, `compliance_manager`, or `auditor`)
 - signing configuration: set `COMPLIANCE_AUTH_SECRET` (HS256) for single-key mode
-- key rotation mode: set `COMPLIANCE_AUTH_KEYS_JSON` to a JSON map of key IDs to secrets (for example `{"key-1":"...","key-2":"..."}`), and include `kid` in token headers
+- key rotation mode: set `COMPLIANCE_AUTH_KEYS_JSON` to a JSON map of key IDs to secrets
 - optional trust constraints: set `COMPLIANCE_AUTH_ISSUER` and `COMPLIANCE_AUTH_AUDIENCE` to enforce issuer and audience claim validation
 
 Temporary migration fallback:
@@ -49,37 +51,36 @@ Temporary migration fallback:
 - `GET /rules`
 - `GET /rules/current`
 - `GET /rules/{control_id}`
-- `POST /evaluate`
+- `POST /evaluate` - submit an incident for compliance evaluation
 - `GET /decisions`
 - `GET /decisions/{case_id}`
-- `GET /reviews/queue` - active review cases
-- `GET /reviews/metrics` - queue volume and SLA-style aging metrics, including risk-band segmentation
-- `GET /reports/summary` - management summary of decisions, reviews, overrides, reopen counts, and risk-band distributions
+- `GET /investigations/queue` - active investigation cases requiring action
+- `GET /investigations/metrics` - queue volume and aging metrics by risk band
+- `GET /reports/summary` - governance summary of decisions, investigations, and risk-band distributions
 - `GET /reviews/{case_id}`
-- `POST /reviews/{case_id}/assign`
-- `POST /reviews/{case_id}/start`
-- `POST /reviews/{case_id}`
-- `POST /reviews/{case_id}/reopen`
-
-Reviewer submissions now set the final case decision and close the review requirement on the stored decision record.
+- `POST /reviews/{case_id}/assign` - assign investigator
+- `POST /reviews/{case_id}/start` - start investigation
+- `POST /reviews/{case_id}` - submit investigation outcome
+- `POST /reviews/{case_id}/reopen` - reopen case for additional investigation
 
 ## Validated behavior
 
-- both rule catalogs load through the API
-- gifts-and-hospitality approval and receipt cases evaluate correctly with the sample payload shapes
-- risk-signal fields are accepted on case input and produce risk metadata (`risk_band`, `risk_score`, `triggered_signal_ids`, `escalation_decision`)
-- high-risk contextual signals (for example government-official involvement) escalate otherwise compliant cases to mandatory human review
-- review-required cases enter the queue, support assignment and in-review transitions, and persist the final reviewer disposition
-- completed review cases can be reopened into a new review cycle with explicit reopen reason capture
-- review queue metrics aggregate active review cases from the persisted audit store and segment queue/SLA counts by risk band
-- summary reporting includes risk-band distributions and reopened-case totals for governance monitoring
-- signed bearer token auth is enforced by default on protected endpoints with key-id trust support, optional issuer/audience validation, and optional transition fallback for legacy headers
-- role-based access checks protect sensitive decision and review endpoints
-- append-only decision and review history is preserved alongside the latest case state
-- automated API tests cover auth, review lifecycle, audit history, and summary reporting
+- all four conduct rule catalogs load through the API
+- incident severity is calculated based on description length, protected characteristics, prior complaints, and involved party count
+- discrimination and international governance incidents automatically escalate to CRITICAL severity with mandatory investigation
+- harassment and client treatment incidents route to investigation based on computed severity bands
+- high-severity cases (HIGH/CRITICAL) require immediate investigation escalation to appropriate stakeholders
+- investigation-required cases enter the active queue and support assignment and workflow transitions
+- completed investigation cases can be reopened with explicit reopen reason tracking
+- investigation queue metrics aggregate active cases by severity band and track SLA aging
+- summary reporting includes severity-band distributions for governance oversight
+- signed bearer token auth is enforced on protected endpoints with key-id support and optional legacy header fallback
+- role-based access controls protect sensitive incident and investigation data
+- append-only decision and investigation history is preserved alongside current case state
 
 ## Next steps
 
-- implement the design in `docs/risk_signals_and_escalation_rules.md` by adding contextual risk signals and escalation routing on top of deterministic controls
-- refine reopened-case semantics further with explicit cycle-level review records
-- migrate HS256 shared-secret verification to asymmetric keys with JWKS distribution for production trust boundaries
+- extend investigation workflow with formal investigation notes and evidence chain tracking
+- add jurisdiction-specific investigation protocols based on country code and regulatory requirements
+- implement escalation notifications to Legal, HR, and Management based on severity band
+- develop dashboard reporting for investigation metrics and governance oversight

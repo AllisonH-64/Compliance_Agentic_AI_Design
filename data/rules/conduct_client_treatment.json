@@ -1,0 +1,22 @@
+{
+  "control_id": "CONDUCT-CLIENT-001",
+  "control_domain": "employee_conduct",
+  "policy_name": "Client and Customer Treatment Policy",
+  "policy_version": "2026-05-01",
+  "description": "Incidents involving poor client treatment, breach of confidentiality, conflict of interest with clients, or unethical business practices require investigation and escalation based on client impact and business risk.",
+  "severity_threshold": 4,
+  "required_evidence": [
+    "incident_report"
+  ],
+  "required_investigator_role": "compliance_analyst",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "severity_score_medium": 4,
+    "severity_score_high": 6,
+    "severity_score_critical": 8,
+    "client_financial_impact": true,
+    "regulatory_breach": true
+  }
+}

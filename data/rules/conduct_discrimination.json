@@ -1,0 +1,21 @@
+{
+  "control_id": "CONDUCT-DISCRIMINATION-001",
+  "control_domain": "employee_conduct",
+  "policy_name": "Anti-Discrimination and Equal Opportunity Policy",
+  "policy_version": "2026-05-01",
+  "description": "Incidents involving discrimination based on protected characteristics (race, gender, religion, disability, age, etc.) require immediate investigation and mandatory escalation to HR and legal.",
+  "severity_threshold": 3,
+  "required_evidence": [
+    "incident_report"
+  ],
+  "required_investigator_role": "compliance_manager",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "severity_score_medium": 4,
+    "severity_score_high": 6,
+    "severity_score_critical": 8,
+    "protected_characteristic_violation": true
+  }
+}

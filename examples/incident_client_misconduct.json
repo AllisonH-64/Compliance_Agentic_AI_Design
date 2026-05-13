@@ -1,0 +1,26 @@
+{
+  "case_id": "CONDUCT-2026-003",
+  "incident_id": "INC-2026-000047",
+  "control_id": "CONDUCT-CLIENT-001",
+  "respondent_name": "emp_022_wilson",
+  "complainant_name": "client_acme_corp",
+  "submitter_role": "account_manager",
+  "incident_report": {
+    "attached": true,
+    "document_id": "DOC-REPORT-CLIENT-001"
+  },
+  "evidence_record": {
+    "attached": true,
+    "document_id": "DOC-EMAIL-CHAIN-001"
+  },
+  "involved_party_role": "client",
+  "country_code": "US",
+  "jurisdiction_risk_level": "low",
+  "incident_description": "Client reports inappropriate conduct and breach of confidentiality. Employee shared sensitive business information with competitor without authorization. Client discovered information appearing in competitor bid during procurement process. Potential loss of client contract and reputational damage.",
+  "incident_date": "2026-05-09",
+  "prior_complaints_12m": 0,
+  "escalation_reference": null,
+  "incident_category": "client_treatment",
+  "involved_parties_count": 2,
+  "protected_characteristic_mentioned": false
+}

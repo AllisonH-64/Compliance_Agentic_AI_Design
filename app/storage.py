@@ -46,7 +46,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS decisions (
                 case_id TEXT PRIMARY KEY,
-                transaction_id TEXT NOT NULL,
+                incident_id TEXT NOT NULL,
                 decision_json TEXT NOT NULL
             )
             """
@@ -102,15 +102,15 @@ def save_decision(
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO decisions (case_id, transaction_id, decision_json)
+            INSERT INTO decisions (case_id, incident_id, decision_json)
             VALUES (?, ?, ?)
             ON CONFLICT(case_id) DO UPDATE SET
-                transaction_id = excluded.transaction_id,
+                incident_id = excluded.incident_id,
                 decision_json = excluded.decision_json
             """,
             (
                 decision_record.case_id,
-                decision_record.transaction_id,
+                decision_record.incident_id,
                 serialized_record,
             ),
         )

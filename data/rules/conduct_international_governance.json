@@ -1,0 +1,28 @@
+{
+  "control_id": "CONDUCT-INTL-GOV-001",
+  "control_domain": "employee_conduct",
+  "policy_name": "International Employment Governance and Regulatory Compliance",
+  "policy_version": "2026-05-01",
+  "description": "Incidents involving violations of international employment law, local regulatory requirements, or cross-border employment governance issues require jurisdiction-specific investigation and escalation.",
+  "severity_threshold": 3,
+  "required_evidence": [
+    "incident_report"
+  ],
+  "required_investigator_role": "compliance_manager",
+  "international_applicability": [
+    "ALL"
+  ],
+  "jurisdiction_specific_rules": {
+    "EU": "GDPR, Works Council Notification, Labor Code Article L1152-1",
+    "UK": "Equality Act 2010, Employment Rights Act 1996",
+    "US": "Title VII, ADA, Age Discrimination in Employment Act",
+    "APAC": "Local labor laws, country-specific protections"
+  },
+  "escalation_triggers": {
+    "severity_score_medium": 4,
+    "severity_score_high": 6,
+    "severity_score_critical": 8,
+    "regulatory_authority_involvement": true,
+    "cross_border_issue": true
+  }
+}

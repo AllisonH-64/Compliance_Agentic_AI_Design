@@ -1,0 +1,22 @@
+{
+  "control_id": "CONDUCT-HARASSMENT-001",
+  "control_domain": "employee_conduct",
+  "policy_name": "Anti-Harassment and Bullying Policy",
+  "policy_version": "2026-05-01",
+  "description": "Incidents involving harassment, bullying, intimidation, or hostile work environment require mandatory investigation and escalation based on severity and evidence.",
+  "severity_threshold": 5,
+  "required_evidence": [
+    "incident_report",
+    "witness_statement"
+  ],
+  "required_investigator_role": "compliance_analyst",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "severity_score_medium": 4,
+    "severity_score_high": 7,
+    "severity_score_critical": 9,
+    "multiple_complaints_12m": 2
+  }
+}

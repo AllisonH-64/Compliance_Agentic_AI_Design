@@ -2,102 +2,70 @@
 
 ## Problem Summary
 
-The Compliance team handles a high volume of gifts and hospitality cases that require consistent checks for approval thresholds, receipt evidence, and policy exceptions. Manual triage across forms, receipts, and approval records is repetitive, slow, and can produce inconsistent outcomes, especially when evidence is incomplete or cases are ambiguous.
+Compliance teams handle a recurring volume of workplace conduct incidents that require consistent triage, severity classification, and escalation. Manual handling can be slow, inconsistent, and difficult to audit at scale, especially when evidence is incomplete or context is sensitive.
 
 ## Proposed Agent
 
-A Compliance Agentic AI assistant performs deterministic policy evaluation, explains outcomes, and routes higher-risk or unclear cases to human reviewers. The system is designed to assist, not replace, compliance officers by combining rule-based checks with controlled human oversight and auditable records.
+A Compliance Agentic AI assistant evaluates incident submissions using deterministic control logic, provides explainable outcomes, and routes investigation-required cases to human reviewers. The system assists compliance staff while preserving accountable human adjudication.
 
 ## Workflow Summary
 
-1. Trigger: employee submits a case.
+1. Trigger: employee or reporter submits an incident case.
 2. Agent intake: validates and normalizes case data.
-3. Rule selection: loads applicable control and policy metadata.
-4. Evaluation: applies deterministic checks and produces a structured decision.
+3. Rule selection: loads applicable control metadata.
+4. Evaluation: applies deterministic conduct logic and severity scoring.
 5. Decision routing:
-   - auto-close low-risk compliant cases
-   - route non-compliant, insufficient-evidence, or ambiguous cases to the review queue
-6. Human review:
+   - close low-risk cleared cases
+   - route investigation_required and insufficient_evidence cases to the review queue
+6. Human investigation:
    - manager assigns reviewer
-   - reviewer starts review
+   - reviewer starts investigation
    - reviewer submits final decision and notes
-7. Final output: decision and review outcome are persisted, then metrics and reporting are updated.
+7. Final output: decision and review outcomes are persisted, then reporting metrics are updated.
 
 ## Key Risks
 
-1. Bias and fairness drift in how cases are escalated or interpreted.
-2. Privacy exposure from sensitive case data.
-3. Over-automation that misses contextual red flags.
-4. False positives from incomplete evidence.
-5. Stale policies causing misclassification.
+1. Bias or fairness drift in escalation behavior.
+2. Privacy exposure from sensitive incident details.
+3. Over-automation that misses contextual harm signals.
+4. False positives from missing or inconsistent evidence.
+5. Policy drift relative to changing conduct guidance.
 6. Unauthorized review actions.
-7. Weak audit defensibility if rationale is not preserved.
-8. Process gaming, such as threshold splitting.
+7. Weak audit defensibility if reasoning is not preserved.
 
 ## Safeguards
 
-1. Deterministic policy checks for consistency.
-2. Explicit insufficient-evidence state to avoid premature adverse decisions.
-3. Human-review-required routing for higher-risk or ambiguous outcomes.
+1. Deterministic control evaluation for consistency.
+2. Explicit insufficient_evidence handling instead of premature adverse closure.
+3. Mandatory investigation routing for medium to critical risk outcomes.
 4. Manager-only assignment control.
 5. Reviewer identity matching on start and submission.
-6. Mandatory reviewer notes for accountable final adjudication.
+6. Mandatory reviewer notes for accountable adjudication.
 7. Append-only decision and review history for audit integrity.
-8. Role-based access controls to enforce least privilege.
-9. Queue and SLA metrics to detect stalled risk cases.
-10. Override capture and reporting to identify where automation needs improvement.
+8. Role-based access controls with signed bearer token auth.
+9. Queue and SLA metrics to detect stalled cases.
+10. Reopen controls with explicit reason capture for new evidence and appeals.
 
-## Worked Example: Client Dinner Expense
+## Worked Example: Harassment Incident
 
-> **Alex** works in sales. He takes a potential client to dinner and spends **$200**. He submits an expense report the next day with a receipt attached but no pre-approval.
+An employee submits a harassment allegation with narrative details but no attached incident report document.
 
-**Step 1 — Submission received.** The agent validates and normalizes Alex's case data.
+Step 1: Submission is validated and mapped to CONDUCT-HARASSMENT-001.
 
-**Step 2 — Policy loaded.** The agent loads two applicable controls:
-- ETH-GIFT-001: spend ≥ $150 requires compliance manager pre-approval.
-- ETH-GIFT-002: spend ≥ $150 requires a receipt.
+Step 2: Deterministic checks evaluate severity context and required documentation.
 
-**Step 3 — Checks run.**
+Step 3: Missing incident report triggers insufficient_evidence and investigation routing.
 
-| # | Check | Alex's Case | Result |
-|---|---|---|---|
-| 1 | Threshold: is $200 ≥ $150? | Yes — both controls apply | — |
-| 2 | Pre-approval on file? | No approval record found | ❌ FAIL |
-| 3 | Receipt attached? | Yes, receipt present | ✅ PASS |
-| 4 | Risk signals (client type, geography, pattern)? | No flags raised | ✅ LOW RISK |
+Step 4: A compliance manager assigns a reviewer.
 
-**Step 4 — Decision stamped.**
+Step 5: Reviewer starts investigation and records final adjudication after evidence follow-up.
 
-```
-Decision: NON-COMPLIANT
-Reason:   Spend of $200.00 meets or exceeds the $150.00 threshold.
-          Required pre-approval record is missing.
-Action:   Routed to human review queue.
-Logged:   2026-05-08T09:14:32Z  |  Agent v1.0
-```
+Step 6: Agent and reviewer decisions remain traceable in append-only history.
 
-**Step 5 — Human review.** Compliance officer Maya Chen is assigned the case. She reviews the AI findings, the receipt, and Alex's explanation (first offense, forgot the rule). She grants a one-time exception and records her rationale:
+## Expected Benefits
 
-```
-Final Decision: APPROVED (Exception Granted)
-Reviewer:       Maya Chen, Compliance Officer
-Notes:          First offense, receipt present, business purpose confirmed.
-                Employee reminded of pre-approval requirement.
-Logged:         2026-05-08T11:02:45Z
-```
-
-**Step 6 — Audit trail persisted.** Both the agent decision and Maya's override are stored in the append-only history, satisfying audit requirements.
-
-> If Alex had obtained pre-approval before the dinner, Check 2 would have passed and the case would have been auto-closed as **Compliant** — no human review needed.
-
----
-
-## Expected Benefits for the Compliance Team
-
-1. Faster triage: routine compliant cases are handled quickly, reducing manual burden.
-2. Better consistency: policy checks are applied uniformly across cases.
-3. Higher-quality reviews: analysts focus on exceptions and genuinely risky cases.
-4. Stronger governance: clear accountability at assignment, review, and adjudication steps.
-5. Better audit readiness: traceable decisions, reviewer actions, and event history.
-6. Operational visibility: queue and SLA metrics improve workload and escalation management.
-7. Continuous improvement: override and outcome data provide feedback for policy and control tuning.
+1. Faster triage and clearer prioritization of investigation work.
+2. Better consistency in applying conduct controls across categories.
+3. Stronger governance with explicit ownership at assignment and adjudication gates.
+4. Better audit readiness through structured rationale and immutable history.
+5. Improved operational visibility via queue, SLA, reopen, and override metrics.

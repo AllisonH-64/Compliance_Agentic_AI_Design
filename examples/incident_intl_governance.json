@@ -1,0 +1,26 @@
+{
+  "case_id": "CONDUCT-2026-004",
+  "incident_id": "INC-2026-000048",
+  "control_id": "CONDUCT-INTL-GOV-001",
+  "respondent_name": "emp_031_mueller",
+  "complainant_name": "hr_de_office",
+  "submitter_role": "international_compliance",
+  "incident_report": {
+    "attached": true,
+    "document_id": "DOC-REPORT-INTL-001"
+  },
+  "evidence_record": {
+    "attached": true,
+    "document_id": "DOC-WORKS-COUNCIL-001"
+  },
+  "involved_party_role": "respondent",
+  "country_code": "DE",
+  "jurisdiction_risk_level": "medium",
+  "incident_description": "Employee termination under review for compliance with German labor law. Works Council not properly notified prior to termination decision. Allegation that termination may violate age discrimination protections under German law (employee age 58). Potential exposure to severance claims and regulatory authority involvement.",
+  "incident_date": "2026-05-11",
+  "prior_complaints_12m": 0,
+  "escalation_reference": "LEGAL-DE-2026-0051",
+  "incident_category": "international_governance",
+  "involved_parties_count": 1,
+  "protected_characteristic_mentioned": true
+}

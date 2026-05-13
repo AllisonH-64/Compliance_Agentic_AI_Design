@@ -1,0 +1,26 @@
+{
+  "case_id": "CONDUCT-2026-005",
+  "incident_id": "INC-2026-000049",
+  "control_id": "CONDUCT-HARASSMENT-001",
+  "respondent_name": "emp_003_kumar",
+  "complainant_name": "emp_009_johnson",
+  "submitter_role": "employee",
+  "incident_report": {
+    "attached": false,
+    "document_id": null
+  },
+  "evidence_record": {
+    "attached": false,
+    "document_id": null
+  },
+  "involved_party_role": "respondent",
+  "country_code": "US",
+  "jurisdiction_risk_level": "low",
+  "incident_description": "Informal complaint about workplace behavior but no formal incident report filed yet. Allegation of disruptive conduct during team meetings.",
+  "incident_date": "2026-05-12",
+  "prior_complaints_12m": 0,
+  "escalation_reference": null,
+  "incident_category": "harassment_bullying",
+  "involved_parties_count": 2,
+  "protected_characteristic_mentioned": false
+}

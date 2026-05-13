@@ -1,130 +1,78 @@
 # MVP Scope
 
-This MVP implements a narrow but realistic Ethics and Compliance workflow for gifts, meals, entertainment, and travel with a shared deterministic evaluation and human review pattern.
+This MVP implements an employee conduct compliance workflow with deterministic rule evaluation, risk-banded escalation, human investigation routing, and auditable lifecycle tracking.
 
-## Selected Recurring Process For The Assignment
+## Current Program Scope
 
-The recurring process selected for the next phase of the project is vendor invoice review.
+The implemented program focuses on employee-conduct incidents rather than spend approvals.
 
-- business activity: accounts payable and procurement teams process a high volume of vendor invoices
-- compliance problem: invoices must be checked for accuracy, fraud indicators, and adherence to procurement controls
-- agent role: monitor invoice submissions, triage exceptions, and summarize flagged cases for compliance or finance review
+- business activity: intake and triage of workplace conduct incidents
+- compliance problem: incidents require consistent policy application, severity classification, and accountable escalation
+- agent role: evaluate incident submissions, route investigations, and maintain a complete audit trail
 
-Typical issues the agent would watch for include:
+## In-Scope Controls
 
-- invoice amount does not match the purchase order or goods receipt
-- duplicate invoice numbers or repeated invoice amounts from the same vendor
-- missing approval or approval from the wrong authority
-- invoice submitted outside agreed payment terms or procurement workflow
-- suspicious vendor behavior that may indicate fraud or policy circumvention
+- CONDUCT-HARASSMENT-001: harassment and bullying incident handling
+- CONDUCT-DISCRIMINATION-001: discrimination allegations and protected-characteristic sensitivity
+- CONDUCT-CLIENT-001: client treatment and relationship conduct concerns
+- CONDUCT-INTL-GOV-001: international governance and jurisdiction-sensitive conduct concerns
 
-## Use Case
+## Decision Outcomes
 
-- Trigger: an employee submits a gifts or hospitality request or a reimbursement case for review
-- Policy 1: submissions at or above the pre-approval threshold require approval from a compliance manager
-- Policy 2: submissions at or above the evidence threshold require a receipt or invoice reference
-- Outcomes: compliant, non-compliant, insufficient evidence, or human review required
+- policy_violation_confirmed
+- cleared
+- insufficient_evidence
+- investigation_required
 
 ## Components
 
-- `app/main.py` exposes API endpoints
-- `app/engine.py` loads the rule catalog, selects the control by `control_id`, and evaluates the case deterministically
-- `app/models.py` defines the request and response schema
-- `app/storage.py` persists decision records in a local SQLite audit store and appends immutable history rows for lifecycle events
-- `requirements.txt` includes `PyJWT` for signed bearer token validation on protected endpoints
-- `data/rules/approval_thresholds.json` stores the gifts-and-hospitality pre-approval control metadata
-- `data/rules/expense_receipts.json` stores the gifts-and-hospitality evidence control metadata
-- `docs/governance_operating_model.md` defines operating governance, KPI thresholds, and change control responsibilities
-- `examples/` contains sample payloads for manual testing
-- `tests/test_api.py` covers the protected API workflow end to end
+- app/main.py exposes FastAPI endpoints for evaluation, investigation lifecycle, and reporting
+- app/engine.py loads rule catalogs and applies deterministic conduct evaluation logic
+- app/models.py defines incident, decision, and review schemas
+- app/storage.py persists current records plus append-only decision and review history
+- data/rules contains versioned control metadata for the four conduct controls
+- examples contains conduct-focused sample payloads for manual testing
+- tests/test_api.py contains API tests for auth, workflow, metrics, and summary behavior
 
-## Audit Trail
+## Audit Trail and Traceability
 
-- every evaluation returns an `evaluated_at` timestamp
-- every `POST /evaluate` call persists or updates a current decision record by `case_id`
-- every decision and review save also writes an append-only history record with actor and event metadata
-- `GET /decisions` lists all stored decision records
-- `GET /decisions/{case_id}` returns one stored record for audit lookup
-- persisted decisions remain readable even when older audit rows predate newer rule metadata fields
-- completed human reviews update the stored decision record with the final disposition
+- every evaluation stores evaluated_at timestamp metadata
+- POST /evaluate persists a decision record by case_id
+- decision and review updates append immutable history events with actor identity and event type
+- GET /decisions and GET /decisions/{case_id} provide current-state lookup
+- legacy rows are deserialized with backward-compatible defaults where new fields were added later
 
-## Access Control And Reporting
+## Access Control and Reporting
 
-- protected endpoints require `Authorization: Bearer <token>` with signed role claims
-- allowed roles are `employee`, `compliance_analyst`, `compliance_manager`, and `auditor`
-- only `compliance_manager` can assign reviews
-- only authenticated reviewers can start or submit their own review actions
-- legacy header auth can be temporarily enabled only via `COMPLIANCE_ALLOW_INSECURE_HEADERS=true`
-- token verification supports key-id based secret selection via `COMPLIANCE_AUTH_KEYS_JSON`
-- optional `COMPLIANCE_AUTH_ISSUER` and `COMPLIANCE_AUTH_AUDIENCE` settings enforce issuer and audience claims
-- `GET /reports/summary` provides management counts for decisions, active reviews, completed reviews, and overrides
+- protected endpoints require bearer tokens with sub and role claims
+- supported roles: employee, compliance_analyst, compliance_manager, auditor
+- assignment is manager-only; start and submit actions require authenticated reviewer identity match
+- optional key-id trust map via COMPLIANCE_AUTH_KEYS_JSON
+- optional issuer and audience enforcement via COMPLIANCE_AUTH_ISSUER and COMPLIANCE_AUTH_AUDIENCE
+- temporary migration fallback COMPLIANCE_ALLOW_INSECURE_HEADERS allows legacy headers when explicitly enabled
 
-## Human Review Workflow
+## Investigation Lifecycle
 
-- `GET /reviews/queue` returns active review cases that still need analyst resolution
-- `GET /reviews/metrics` returns queue volume and aging metrics for active review cases
-- `POST /reviews/{case_id}/assign` assigns a reviewer and marks the case as assigned
-- `POST /reviews/{case_id}/start` marks an assigned case as in review
-- `POST /reviews/{case_id}` records an analyst decision, final compliance state, and notes
-- `GET /reviews/{case_id}` returns the stored reviewer action for audit lookup
-- reviewer outcomes support approval, rejection, and explicit override capture
+- GET /reviews/queue returns active investigation queue items
+- GET /reviews/metrics returns queue volume and SLA-aging metrics
+- POST /reviews/{case_id}/assign assigns a reviewer
+- POST /reviews/{case_id}/start transitions to in_review
+- POST /reviews/{case_id} records final reviewer adjudication
+- POST /reviews/{case_id}/reopen creates a new cycle with explicit reopen reason
+- GET /reviews/{case_id} returns stored review record for the case
 
-## Workflow Map
+## Current Validation Status
 
-The full swimlane is documented in `docs/workflow_swimlane.md`.
-
-### Step By Step Flow
-
-1. Trigger: an employee submits a gifts or hospitality case payload.
-2. Agent action: the system validates and normalizes the payload.
-3. Agent action: the system loads the selected control by `control_id`.
-4. Agent action: deterministic policy checks run and produce a structured decision record.
-5. Decision point: if compliant with no review requirement, the case auto-closes.
-6. Decision point: if non-compliant, insufficient evidence, or human review required, the case enters the review queue.
-7. Human oversight: a compliance manager assigns a reviewer.
-8. Human oversight: the assigned reviewer starts review.
-9. Human oversight: the reviewer submits final adjudication and notes.
-10. Final output: the system persists final decision and review outcome, then updates queue and summary metrics.
-
-### Human Oversight Decision Points
-
-- assignment gate: only `compliance_manager` can assign review ownership
-- start gate: only the authenticated assigned reviewer can start review work
-- adjudication gate: a human reviewer sets final decision and disposition notes
-- exception gate: ambiguous policy-scope or evidence issues are explicitly routed to human review
-
-### Dependencies
-
-- data sources: intake payload, control catalogs, approval evidence, receipt evidence, persisted decision and review records
-- permissions: `X-User-Id` and `X-User-Role` headers with role-based checks across review actions
-- system access: API endpoints, SQLite audit store, and append-only decision/review history tables
-
-## Why This Is a Real Ethics and Compliance Use Case
-
-- gifts and hospitality is a common anti-bribery and conflict-of-interest workflow handled by compliance teams
-- the workflow combines clear thresholds with ambiguous exceptions, which makes it a good fit for an agentic pattern
-- the required controls are easy to explain to stakeholders: who approved, what was spent, what evidence exists, and whether escalation is needed
-- the human review queue reflects how compliance analysts already work in practice
-
-## Validation Status
-
-- verified: both control catalogs load through the API
-- verified: gifts-and-hospitality approval and receipt examples evaluate with the expected decisions
-- verified: queue, assignment, start, and review completion flows work end to end
-- verified: queue metrics load successfully after adding backward-compatible deserialization for legacy audit rows
-- verified: role-based access checks reject unauthorized review actions
-- verified: audit history captures each decision lifecycle step without losing the latest case state
-- verified: contextual risk-signal inputs are evaluated and persisted in decision records with escalation metadata
-- verified: compliant low-risk cases auto-close while compliant high-risk cases route to mandatory human review
-- verified: completed reviews can be reopened into a new cycle with captured reopen reason and preserved decision history
-- verified: review queue metrics and summary reporting include risk-band segmentation and reopened-case reporting
-- verified: signed bearer token auth is enforced by default and validated in API tests
-- verified: token issuer/audience claim checks and key-id trust selection are covered by API tests
-- verified: focused API tests pass for auth, reporting, reopen lifecycle behavior, review completion, receipt-evidence control behavior, risk escalation behavior, review-state metrics segmentation, and SLA breach counting
+- verified: all conduct rule catalogs load via API endpoints
+- verified: deterministic incident evaluation returns structured decision records
+- verified: assignment, start, submit, and reopen lifecycle transitions persist correctly
+- verified: append-only history captures decision and review lifecycle events
+- verified: queue metrics include status counts, SLA breach counts, and risk-band segmentation
+- verified: summary reporting includes totals, completed investigations, overrides, and reopen dimensions
+- verified: bearer auth, issuer/audience checks, and key-id trust behavior are covered by tests
 
 ## Immediate Next Build Step
 
-- implement `docs/risk_signals_and_escalation_rules.md` in code, starting with new case-schema risk fields and deterministic signal evaluation
-- add escalation routing rules that combine baseline control outcomes with risk bands
-- finalize reopened-case cycle handling so prior reviewer outcomes remain immutable in history
-- replace header-only role assertions with stronger authentication and identity binding
+- align remaining legacy gift-domain tests and references to the conduct-domain schema
+- add explicit event emissions for risk computation and escalation transitions
+- extend summary outputs with median and p95 investigation turnaround metrics

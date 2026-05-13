@@ -1,0 +1,26 @@
+{
+  "case_id": "CONDUCT-2026-001",
+  "incident_id": "INC-2026-000045",
+  "control_id": "CONDUCT-HARASSMENT-001",
+  "respondent_name": "emp_005_jones",
+  "complainant_name": "emp_012_smith",
+  "submitter_role": "hr_administrator",
+  "incident_report": {
+    "attached": true,
+    "document_id": "DOC-REPORT-0045"
+  },
+  "evidence_record": {
+    "attached": true,
+    "document_id": "DOC-WITNESS-001"
+  },
+  "involved_party_role": "respondent",
+  "country_code": "US",
+  "jurisdiction_risk_level": "medium",
+  "incident_description": "Employee reported experiencing persistent verbal harassment and intimidation from supervisor over a 3-month period. Multiple instances of unprofessional language and threatening behavior documented. Witness statements from 2 colleagues support the complaint. Incident occurred in workplace during business hours.",
+  "incident_date": "2026-05-10",
+  "prior_complaints_12m": 1,
+  "escalation_reference": null,
+  "incident_category": "harassment_bullying",
+  "involved_parties_count": 3,
+  "protected_characteristic_mentioned": false
+}

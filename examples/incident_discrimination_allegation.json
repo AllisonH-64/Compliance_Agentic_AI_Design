@@ -1,0 +1,26 @@
+{
+  "case_id": "CONDUCT-2026-002",
+  "incident_id": "INC-2026-000046",
+  "control_id": "CONDUCT-DISCRIMINATION-001",
+  "respondent_name": "emp_008_brown",
+  "complainant_name": "emp_015_patel",
+  "submitter_role": "hr_director",
+  "incident_report": {
+    "attached": true,
+    "document_id": "DOC-REPORT-0046"
+  },
+  "evidence_record": {
+    "attached": true,
+    "document_id": "DOC-EVIDENCE-DISCRIM-001"
+  },
+  "involved_party_role": "respondent",
+  "country_code": "US",
+  "jurisdiction_risk_level": "medium",
+  "incident_description": "Employee alleges unfair treatment and exclusion from promotion consideration based on national origin and accent. Claims include being passed over for leadership training and being assigned to less desirable projects. Pattern of similar complaints from other employees of similar backgrounds identified in historical records.",
+  "incident_date": "2026-05-08",
+  "prior_complaints_12m": 2,
+  "escalation_reference": null,
+  "incident_category": "discrimination",
+  "involved_parties_count": 2,
+  "protected_characteristic_mentioned": true
+}

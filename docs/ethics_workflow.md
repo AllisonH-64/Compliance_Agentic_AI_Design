@@ -2,120 +2,73 @@
 
 ## Project Concept
 
-This project is best framed as an Agentic AI assistant for gifts, meals, entertainment, and travel compliance. That is a real workflow owned by Ethics and Compliance teams because it sits at the intersection of anti-bribery rules, conflicts of interest, expense governance, and manager accountability.
+This project is an Agentic AI assistant for employee conduct compliance. It supports repeatable policy evaluation for workplace incidents, routes cases to human investigators when needed, and preserves traceable decision history for governance and audit.
 
-The system does not replace compliance officers. It reduces manual triage by collecting the right evidence, applying the policy consistently, and routing only the cases that need judgment.
+The system is designed to support compliance teams, not replace them. Deterministic controls handle consistent triage, while human reviewers remain accountable for adjudication and overrides.
 
-## Selected Recurring Process To Monitor
+## Business Problem
 
-For the next project step, the selected recurring compliance process is reviewing vendor invoices for accuracy, fraud detection, and compliance with procurement policies.
+Organizations handle recurring conduct incidents across multiple categories, including harassment, discrimination, client treatment concerns, and international governance obligations. Without consistent triage and clear escalation criteria, outcomes can become slow, inconsistent, and difficult to audit.
 
-This process is a strong fit for an AI agent because it requires repeated monitoring, triage, and summarization at scale:
+Key operational questions include:
 
-- monitoring: compare invoice details against purchase orders, approval records, vendor master data, and payment terms
-- triage: flag duplicate invoices, mismatched amounts, missing approvals, split purchases, or suspicious vendor patterns for analyst review
-- summarization: prepare a concise case summary that explains the discrepancy, supporting evidence, and recommended next action
+- does the incident have sufficient documentation to proceed
+- what severity level should be assigned based on known facts
+- does the case require immediate investigation escalation
+- can the case be cleared or must it remain in active review
+- who is accountable for final disposition
 
-It is also operationally important because invoice review happens continuously, touches multiple systems, and exposes the organization to overpayment, fraud, and policy-breach risk if handled inconsistently.
+## Current Multi-Step Workflow
 
-## Note On Current MVP
+### 1. Intake and Normalization
 
-The current MVP in this repository still implements a gifts-and-hospitality workflow. The vendor invoice process is the selected next design direction for the assignment and can reuse the same agentic pattern: intake, evidence collection, deterministic checks, risk routing, human review, and audit logging.
+- receive incident payload with core metadata and contextual fields
+- validate schema and normalize evidence references
+- map submission to selected control_id
 
-## The Business Problem
+### 2. Deterministic Policy Evaluation
 
-Large organizations receive a steady stream of requests and reimbursement submissions for customer meals, event tickets, travel, and other hospitality. Compliance teams need to answer the same questions repeatedly:
+- load the current rule metadata from the rule catalog
+- evaluate incident facts against control-specific logic
+- produce initial decision state, severity_score, and recommended_action
 
-- Is the spend above the policy threshold?
-- Was the required pre-approval obtained?
-- Is receipt evidence attached?
-- Does the case involve facts that make it higher risk than usual?
-- Can the case be closed, or does an analyst need to review it?
+### 3. Risk Banding and Escalation
 
-Today that often means checking forms, receipts, policy PDFs, and approval records across multiple systems. The work is repetitive, time-sensitive, and easy to execute inconsistently.
+- convert control evaluation into risk_band and risk_score
+- apply escalation_decision and rationale metadata
+- mark cases for investigation when required by risk and policy conditions
 
-## Where Agentic AI Fits
+### 4. Human Investigation Lifecycle
 
-The agentic pattern works here because the workflow combines deterministic checks with incomplete evidence and occasional exceptions.
+- manager assigns reviewer
+- assigned reviewer starts investigation
+- reviewer submits outcome, final decision, and notes
+- manager can reopen completed cases with explicit reopen reason when new evidence appears
 
-### Deterministic checks
+### 5. Audit and Governance Reporting
 
-- spend exceeds threshold
-- approval is missing
-- receipt is missing
-- approver role does not match policy
+- persist current decision and review state by case_id
+- append immutable lifecycle history rows for each state transition
+- provide queue metrics and summary reporting for governance oversight
 
-### Judgment-heavy checks
+## Implemented Control Coverage
 
-- a delegated approver may be valid under a local exception
-- a missing field may be explained in supporting documents
-- repeated hospitality to the same external party may increase risk
-- government official involvement may require escalation even if the amount is small
+- CONDUCT-HARASSMENT-001
+- CONDUCT-DISCRIMINATION-001
+- CONDUCT-CLIENT-001
+- CONDUCT-INTL-GOV-001
 
-## Proposed Multi-Agent Workflow
+These controls share a consistent output contract while keeping category-specific severity and escalation behavior.
 
-### 1. Intake Agent
+## Why This Is a Practical Ethics Workflow
 
-- receives a new hospitality request or expense claim
-- creates a case record
-- identifies the applicable control domain
+- it mirrors real compliance operations where deterministic checks and human judgment coexist
+- it supports consistent triage while preserving investigator discretion
+- it captures explainable artifacts for internal assurance and external audit
+- it enables measurable operations via queue status, SLA, and reopen tracking
 
-### 2. Policy Mapping Agent
+## Near-Term Expansion Direction
 
-- retrieves the relevant policy version
-- selects the threshold, required approver, and evidence obligations
-- identifies exception paths that require analyst judgment
-
-### 3. Evidence Collection Agent
-
-- gathers the request form, approval metadata, and receipt artifacts
-- normalizes evidence into a single case schema
-- marks missing or conflicting evidence
-
-### 4. Compliance Evaluation Agent
-
-- runs deterministic checks first
-- produces a structured decision, rationale, and confidence score
-- distinguishes between non-compliance and insufficient evidence
-
-### 5. Risk Routing Agent
-
-- raises severity for higher-risk patterns
-- prioritizes cases for the analyst queue
-- recommends whether the case can be auto-closed or must be escalated
-
-### 6. Human Review Agent
-
-- prepares a concise analyst summary
-- shows the rule, evidence, and uncertainty
-- captures the reviewer decision, override, and notes
-
-## MVP Mapping In This Repository
-
-The current MVP already implements the first practical slice of this workflow.
-
-- `ETH-GIFT-001`: pre-approval is required when spend is at or above 150 USD
-- `ETH-GIFT-002`: receipt evidence is required when spend is at or above 75 USD
-- `/evaluate`: runs the deterministic evaluation and produces a decision record
-- `/reviews/queue`: shows active cases awaiting analyst action
-- `/reviews/{case_id}/assign`, `/start`, and `POST /reviews/{case_id}`: support reviewer assignment, work in progress, and final disposition
-- SQLite persistence provides a lightweight local audit trail
-
-## Why This Is Practical
-
-- the workflow is familiar to business stakeholders and compliance officers
-- the control logic is easy to validate with sample cases
-- the human review path is necessary and realistic, not artificial
-- the design can grow from simple thresholds to richer anti-bribery screening without changing the operating model
-
-## Recommended Next Iteration
-
-To make the concept more representative of a production Ethics and Compliance workflow, extend the case schema with:
-
-- recipient type, including government official or state-owned entity
-- country or market risk
-- business purpose of the event or gift
-- prior interactions with the same recipient
-- exception or waiver references
-
-That would allow the agentic system to keep deterministic controls for core policy gates while using retrieval and reasoning only for the ambiguous cases where analyst judgment is actually required.
+- extend risk features for repeat-pattern and jurisdiction-specific signal scoring
+- add explicit evidence request and evidence timeout events
+- add trend analytics on reviewer overrides and reopen causes

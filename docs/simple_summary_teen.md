@@ -1,119 +1,68 @@
-# Compliance Agentic AI — Explained Simply
+# Compliance Agentic AI - Explained Simply
 
 ## What Is It?
 
-A company has rules about spending money on things like client dinners, gifts, and entertainment. Someone has to check that employees are following those rules. Doing that by hand — reading every receipt and form — takes a long time and people make mistakes.
+A company has rules for how workplace conduct incidents must be handled. Someone has to check each report, see if there is enough evidence, and decide whether an investigation is needed.
 
-This AI agent is an **automated rule-checker**. It reads the expense submissions, applies the company's policy, and decides what to do — instantly and consistently, every time.
+Doing that by hand for every case takes time and can be inconsistent. This AI agent acts like a fast assistant that follows policy rules the same way every time.
 
----
+## A Simple Scenario
 
-## The Restaurant Scenario
+Jordan reports a harassment incident at work. Jordan writes details about what happened, but forgets to attach the formal incident report document.
 
-> **Alex** works in sales. He takes a potential client out to dinner at a restaurant and spends **$200**. He submits an expense report the next day.
+Here is what the system does.
 
-Here is exactly what happens, step by step:
+### Step 1 - Case Is Submitted
 
----
+The case includes:
 
-### Step 1 — Alex Submits the Expense
+- case_id and incident_id
+- incident description
+- involved people and context
+- attached evidence if available
 
-Alex fills out a form with:
-- Amount: $200
-- Purpose: Client dinner
-- Receipt: attached (photo of the bill)
-- Pre-approval: none — he didn't ask before going
+### Step 2 - AI Loads the Right Rule
 
-The form hits the system and the AI agent wakes up.
+The system selects the harassment control and checks what evidence is required.
 
----
+### Step 3 - AI Runs Checks
 
-### Step 2 — The AI Reads the Submission
+It checks things like:
 
-The agent pulls in Alex's case and loads the relevant company policy:
+- Is required incident documentation attached?
+- Are protected characteristics mentioned?
+- Are there prior complaints tied to the same respondent?
+- How severe does this case appear based on the policy logic?
 
-> **Policy ETH-GIFT-001:** Any spend of **$150 or more** on gifts, meals, or entertainment requires a **pre-approval from a compliance manager** before the money is spent.
+### Step 4 - AI Creates a Decision
 
-> **Policy ETH-GIFT-002:** Any spend of **$150 or more** also requires a **receipt** as evidence.
+Because the required incident report is missing, the system marks the case as insufficient_evidence and routes it to investigation review.
 
----
+The AI does not make a final punishment decision. It flags the issue and sends it to trained reviewers.
 
-### Step 3 — The AI Runs Its Checks
+### Step 5 - Human Reviewer Decides
 
-| # | Check | What the AI Looks For | Alex's Case | Result |
-|---|---|---|---|---|
-| 1 | **Threshold** | Is $200 ≥ $150? | Yes | Approval and receipt are both required |
-| 2 | **Pre-approval** | Is there a compliance manager approval on file? | No approval found | ❌ FAIL |
-| 3 | **Receipt** | Is a receipt attached? | Yes, receipt present | ✅ PASS |
-| 4 | **Risk signals** | High-risk client? Pattern of splitting bills? Unusual geography? | No flags raised | ✅ LOW RISK |
+A compliance reviewer is assigned, investigates, records notes, and submits the final decision.
 
----
+### Step 6 - Everything Is Logged
 
-### Step 4 — The AI Makes a Decision
+The system saves:
 
-Because Check #2 failed, the agent cannot approve the case automatically. It stamps the case:
+- what the AI decided first
+- what the human decided finally
+- who did each action and when
 
-```
-Decision: NON-COMPLIANT
-Reason:   Spend of $200.00 meets or exceeds the $150.00 threshold.
-          Required pre-approval record is missing.
-Action:   Routed to human review queue.
-Logged:   2026-05-08T09:14:32Z  |  Agent v1.0
-```
+That gives a full audit trail.
 
-The agent does **not** close the case or punish Alex. It simply flags it and sends it to the review queue for a real person to look at.
-
----
-
-### Step 5 — A Human Reviewer Takes Over
-
-A compliance officer — let's call her **Maya** — gets assigned Alex's case. She can see:
-- The AI's findings
-- The receipt Alex uploaded
-- Alex's explanation (he forgot about the pre-approval rule)
-
-Maya decides this looks like an honest mistake. She approves it as a one-time exception and writes a note explaining why.
-
-```
-Final Decision: APPROVED (Exception Granted)
-Reviewer:       Maya Chen, Compliance Officer
-Notes:          First offense, receipt present, business purpose confirmed.
-                Employee reminded of pre-approval requirement.
-Logged:         2026-05-08T11:02:45Z
-```
-
----
-
-### Step 6 — Everything Is Saved
-
-Both the AI's decision and Maya's override are permanently stored. If the company ever gets audited, there is a full trail:
-
-- Who submitted it
-- What the AI found
-- What the human decided
-- Why
-
----
-
-## What If Alex Had Done Everything Right?
-
-If Alex had gotten pre-approval **before** the dinner, the AI's Check #2 would have passed. The case would have been automatically closed as **Compliant** — no human needed, done in seconds.
-
-That is the point: the AI handles the clean cases instantly, and humans only spend time on the ones that genuinely need judgment.
-
----
-
-## The Four Possible Outcomes
+## Possible Outcomes
 
 | Outcome | What It Means |
 |---|---|
-| ✅ **Compliant** | All checks passed — case closed automatically |
-| ❌ **Non-Compliant** | A rule was broken — sent to human review |
-| ❓ **Insufficient Evidence** | Info is missing — held until more is provided |
-| ⚠️ **Human Review Required** | Checks passed but something looks risky — human must decide |
-
----
+| cleared | Case can be closed based on current evidence |
+| policy_violation_confirmed | Policy breach is confirmed |
+| insufficient_evidence | More evidence is needed |
+| investigation_required | Human investigation must continue |
 
 ## One-Line Summary
 
-> The AI reads Alex's dinner receipt, checks it against company rules in seconds, flags the missing pre-approval, and hands the case to a human reviewer — so the compliance team only deals with what actually needs their judgment.
+The AI quickly triages conduct reports, but people stay in charge of final investigation decisions.

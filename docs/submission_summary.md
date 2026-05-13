@@ -2,7 +2,7 @@
 
 ## Project Objective
 
-Design and implement an Agentic AI compliance workflow for gifts and hospitality that combines deterministic policy controls, contextual risk escalation, human-in-the-loop adjudication, and auditable governance.
+Design and implement an Agentic AI compliance workflow for employee conduct incidents that combines deterministic policy controls, risk-banded escalation, human-in-the-loop adjudication, and auditable governance.
 
 ## What Was Delivered
 
@@ -15,24 +15,26 @@ Design and implement an Agentic AI compliance workflow for gifts and hospitality
 
 ## Core Controls Implemented
 
-- `ETH-GIFT-001`: spend at or above policy threshold requires pre-approval evidence.
-- `ETH-GIFT-002`: spend at or above policy threshold requires receipt evidence.
+- CONDUCT-HARASSMENT-001
+- CONDUCT-DISCRIMINATION-001
+- CONDUCT-CLIENT-001
+- CONDUCT-INTL-GOV-001
 
-Decisions support: compliant, non-compliant, insufficient evidence, and human review required.
+Decisions support: policy_violation_confirmed, cleared, insufficient_evidence, and investigation_required.
 
 ## Key Phase Outcomes
 
 ### Phase A/B: Risk Signals and Escalation
 
-- Added contextual fields (recipient type, geography risk, event context, interaction history, business purpose).
+- Added incident-context fields for role, category, jurisdiction risk, and prior complaints.
 - Added deterministic signal computation and risk-band assignment.
-- Added escalation rules that route compliant but high-risk cases to mandatory human review.
+- Added escalation rules that route medium to critical risk cases to mandatory investigation workflow.
 
 ### Phase C: Lifecycle and Reporting
 
 - Added review reopening endpoint and semantics.
 - Added `review_cycle_id` and `reopen_reason` tracking.
-- Expanded metrics and summary reporting with risk-band segmentation and reopen analytics.
+- Expanded metrics and summary reporting with risk-band segmentation, status counts, and reopen analytics.
 
 ### Phase D: Authentication Hardening
 
@@ -55,7 +57,7 @@ A formal governance model was added with:
 ## Validation Evidence
 
 - Automated API test suite expanded across auth, review lifecycle, escalation behavior, reporting, and reopen flow.
-- Final validated status: 11 tests passed.
+- Final validated status in prior phase: 11 tests passed.
 
 ## Submission Readiness
 
@@ -71,4 +73,4 @@ This assignment is complete for design and MVP demonstration scope:
 1. Move from shared-secret HS256 to asymmetric signing with JWKS.
 2. Add stronger governance analytics for fairness by organizational segments.
 3. Add cycle-level review records for richer reopened-case lineage.
-4. Expand to additional compliance domains (for example vendor invoice controls).
+4. Add jurisdiction-specific escalation playbooks for international governance incidents.

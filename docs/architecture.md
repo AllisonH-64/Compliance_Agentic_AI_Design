@@ -24,7 +24,7 @@ The system should answer five questions reliably:
 
 ## 2A. Recommended Project Framing
 
-For this repository, the clearest practical workflow is gifts, meals, entertainment, and travel compliance.
+For this repository, the clearest practical workflow is employee conduct incident compliance.
 
 Why this workflow fits well:
 
@@ -150,7 +150,7 @@ Output example:
 
 - status: likely non-compliant
 - reason: approval missing and threshold exceeded
-- evidence: invoice, approval record search result, policy clause
+- evidence: incident report, evidence attachment lookup result, policy clause
 - confidence: 0.84
 
 ### E. Risk Scoring Agent

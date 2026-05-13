@@ -183,7 +183,7 @@
           <span class="badge done">Done</span>
           <div class="step-text">
             Defined the core concept: agentic AI for Ethics &amp; Compliance workflows
-            <div class="step-detail">Selected gifts, meals, entertainment, and travel review as the first target process</div>
+            <div class="step-detail">Selected employee conduct incident review as the first target process</div>
           </div>
         </li>
         <li class="done">
@@ -215,13 +215,13 @@
     <!-- Phase 2 -->
     <h2>Phase 2</h2>
     <div class="phase">
-      <div class="phase-title">MVP Build – First Control (Approval Threshold)</div>
+      <div class="phase-title">MVP Build – Conduct Rule Foundation</div>
       <ul class="step-list">
         <li class="done">
           <span class="badge done">Done</span>
           <div class="step-text">
-            Defined MVP scope and selected the first compliance control
-            <div class="step-detail">docs/mvp.md — ETH-GIFT-001: pre-approval required at or above 150 USD</div>
+            Defined MVP scope and selected the first compliance control set
+            <div class="step-detail">docs/mvp.md — conduct domain controls and deterministic incident evaluation scope</div>
           </div>
         </li>
         <li class="done">
@@ -234,8 +234,8 @@
         <li class="done">
           <span class="badge done">Done</span>
           <div class="step-text">
-            Created versioned rule catalog for the first control
-            <div class="step-detail">data/rules/approval_thresholds.json — control metadata including threshold, scope, and required approver role</div>
+            Created versioned rule catalogs for conduct controls
+            <div class="step-detail">data/rules/conduct_*.json — control metadata including category, required evidence, and escalation triggers</div>
           </div>
         </li>
         <li class="done">
@@ -248,8 +248,8 @@
         <li class="done">
           <span class="badge done">Done</span>
           <div class="step-text">
-            Created sample request payloads for manual testing
-            <div class="step-detail">examples/transaction_compliant.json, examples/transaction_missing_approval.json</div>
+            Created sample incident payloads for manual testing
+            <div class="step-detail">examples/incident_*.json — conduct incident submissions across harassment, discrimination, client, and international contexts</div>
           </div>
         </li>
       </ul>
@@ -260,13 +260,13 @@
     <!-- Phase 3 -->
     <h2>Phase 3</h2>
     <div class="phase">
-      <div class="phase-title">MVP Build – Second Control &amp; Multi-Control Engine</div>
+      <div class="phase-title">MVP Build – Multi-Control Conduct Engine</div>
       <ul class="step-list">
         <li class="done">
           <span class="badge done">Done</span>
           <div class="step-text">
-            Added second compliance control (evidence / receipt requirement)
-            <div class="step-detail">ETH-GIFT-002: receipt required at or above 75 USD — data/rules/expense_receipts.json</div>
+            Added additional conduct controls and category-specific evaluation paths
+            <div class="step-detail">CONDUCT-DISCRIMINATION-001, CONDUCT-CLIENT-001, and CONDUCT-INTL-GOV-001 alongside harassment baseline</div>
           </div>
         </li>
         <li class="done">
@@ -286,8 +286,8 @@
         <li class="done">
           <span class="badge done">Done</span>
           <div class="step-text">
-            Added sample payloads for the expense receipt control
-            <div class="step-detail">examples/expense_receipt_compliant.json, examples/expense_receipt_missing.json</div>
+            Added sample payloads for expanded conduct categories
+            <div class="step-detail">examples/incident_discrimination_allegation.json, incident_client_misconduct.json, incident_intl_governance.json</div>
           </div>
         </li>
       </ul>
@@ -348,8 +348,8 @@
         <li class="done">
           <span class="badge done">Done</span>
           <div class="step-text">
-            Added header-based role-based access control (RBAC) on sensitive endpoints
-            <div class="step-detail">X-User-Id and X-User-Role headers required; roles: employee, compliance_analyst, compliance_manager, auditor</div>
+            Added signed bearer-token role-based access control (RBAC) on sensitive endpoints
+            <div class="step-detail">Authorization bearer token with role claims; optional controlled fallback to legacy headers</div>
           </div>
         </li>
         <li class="done">
@@ -370,7 +370,7 @@
           <span class="badge done">Done</span>
           <div class="step-text">
             Built pytest API test suite covering the full protected workflow
-            <div class="step-detail">tests/test_api.py — auth checks, both controls, and full review lifecycle coverage</div>
+            <div class="step-detail">tests/test_api.py — auth checks, conduct-control behavior, reopen lifecycle, and reporting coverage</div>
           </div>
         </li>
       </ul>
@@ -386,22 +386,22 @@
         <li class="pending">
           <span class="badge pending">Next</span>
           <div class="step-text">
-            Design the vendor invoice review process as the second recurring workflow
-            <div class="step-detail">Reuse the same intake → evaluate → route → human review → audit pattern for accounts payable and procurement controls</div>
+            Add cycle-level investigation records for richer reopened-case lineage
+            <div class="step-detail">Track each review cycle as a first-class record while preserving immutable prior outcomes</div>
           </div>
         </li>
         <li class="pending">
           <span class="badge pending">Next</span>
           <div class="step-text">
-            Add a third rule catalog and extend rule-selection logic for the new domain
-            <div class="step-detail">Invoice controls: PO matching, duplicate detection, approval authority, payment terms compliance</div>
+            Add explicit risk signal event history for governance explainability
+            <div class="step-detail">Capture risk_signals_computed and escalation_applied events with policy version metadata</div>
           </div>
         </li>
         <li class="pending">
           <span class="badge pending">Next</span>
           <div class="step-text">
-            Align README and docs with the completed multi-control implementation
-            <div class="step-detail">Confirmed in session bookmark — docs update was the final remaining item from the multi-control refactor</div>
+            Expand governance metrics with fairness and drift indicators
+            <div class="step-detail">Add trend views for escalations, overrides, and reopen rates by role and geography</div>
           </div>
         </li>
         <li class="pending">
@@ -414,7 +414,7 @@
     </div>
 
     <div class="note">
-      The current build demonstrates a working human-in-the-loop compliance pattern: deterministic rule evaluation, structured decision output, a full reviewer lifecycle, role-based access, and an append-only audit trail. The next phase extends this pattern to a second compliance domain.
+      The current build demonstrates a working human-in-the-loop compliance pattern: deterministic incident evaluation, structured decision output, a full reviewer lifecycle, signed-role access control, and an append-only audit trail.
     </div>
 
   </main>

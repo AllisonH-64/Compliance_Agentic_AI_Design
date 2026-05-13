@@ -8,7 +8,7 @@ import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from jwt import InvalidTokenError
 
-from app.engine import calculate_review_queue_metrics, evaluate_transaction_case, load_rule, load_rules
+from app.engine import calculate_review_queue_metrics, evaluate_incident_case, load_rule, load_rules
 from app.models import (
     ComplianceSummaryReport,
     DEFAULT_CONTROL_ID,
@@ -26,7 +26,7 @@ from app.models import (
     ReviewStatus,
     RuleMetadata,
     ReviewSubmission,
-    TransactionCase,
+    IncidentCase,
     UserRole,
 )
 from app.storage import (
@@ -41,10 +41,10 @@ from app.storage import (
 
 
 app = FastAPI(
-    title="Compliance Agentic AI MVP",
-    version="0.1.0",
+    title="Employee Conduct Compliance Agentic AI",
+    version="0.2.0",
     description=(
-        "A thin vertical slice for gifts-and-hospitality compliance checks with deterministic policy evaluation."
+        "A compliance evaluation system for employee conduct incidents including harassment, discrimination, client treatment, and international employment governance."
     ),
 )
 
@@ -265,14 +265,14 @@ def get_rule(control_id: str) -> RuleMetadata:
 
 @app.post("/evaluate", response_model=DecisionRecord)
 def evaluate_case(
-    transaction_case: TransactionCase,
+    incident_case: IncidentCase,
     current_user: Annotated[
         AuthContext,
         Depends(require_roles(UserRole.EMPLOYEE, UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER)),
     ],
 ) -> DecisionRecord:
     try:
-        decision_record = evaluate_transaction_case(transaction_case)
+        decision_record = evaluate_incident_case(incident_case)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     save_decision(
@@ -354,13 +354,13 @@ def get_summary_report(
     return ComplianceSummaryReport(
         generated_at=datetime.now(UTC).isoformat(),
         total_decisions=len(decisions),
-        compliant_count=sum(1 for decision in decisions if decision.decision == DecisionState.COMPLIANT),
-        non_compliant_count=sum(1 for decision in decisions if decision.decision == DecisionState.NON_COMPLIANT),
+        policy_violation_confirmed_count=sum(1 for decision in decisions if decision.decision == DecisionState.POLICY_VIOLATION_CONFIRMED),
+        cleared_count=sum(1 for decision in decisions if decision.decision == DecisionState.CLEARED),
         insufficient_evidence_count=sum(
             1 for decision in decisions if decision.decision == DecisionState.INSUFFICIENT_EVIDENCE
         ),
-        human_review_required_count=sum(
-            1 for decision in decisions if decision.decision == DecisionState.HUMAN_REVIEW_REQUIRED
+        investigation_required_count=sum(
+            1 for decision in decisions if decision.decision == DecisionState.INVESTIGATION_REQUIRED
         ),
         active_review_count=sum(1 for decision in decisions if decision.review_required),
         completed_review_count=sum(1 for decision in decisions if decision.review_status == ReviewStatus.COMPLETED),
