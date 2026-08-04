@@ -6,6 +6,11 @@ This repository defines a practical framework for an Agentic AI system supportin
 
 This repository now contains the design foundation and a FastAPI MVP with four conduct-focused compliance controls, severity-based risk escalation, investigation workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
 
+It also includes workspace customization for Copilot:
+
+- `AGENTS.md` defines always-on repository guidance for the compliance workflow.
+- `.github/agents/compliance-agent.agent.md` adds a named `Compliance Agent` mode for this workspace.
+
 ## Contents
 
 - `docs/architecture.md` - end-to-end architecture and reference implementation design
@@ -16,6 +21,7 @@ This repository now contains the design foundation and a FastAPI MVP with four c
 - `app/` - FastAPI service and deterministic evaluation engine
 - `data/rules/` - versioned rule catalogs for conduct controls
 - `examples/` - sample incident report payloads
+- `.github/agents/` - named Copilot agent definitions for this workspace
 
 ## Current MVP controls
 
