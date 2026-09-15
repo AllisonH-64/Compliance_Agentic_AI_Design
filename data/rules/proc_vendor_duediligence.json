@@ -25,5 +25,29 @@
       "high": ["procurement", "legal"],
       "critical": ["procurement", "legal", "finance"]
     }
-  }
+  },
+  "policy_references": [
+    {
+      "source_type": "external_regulation",
+      "citation": "Money Laundering and Financing of Terrorism (Prevention and Control) Act, 2011-23 (as amended by the 2019-22 Amendment Act)",
+      "jurisdiction": "Barbados",
+      "authority": "Anti-Money Laundering Authority (AMLA) / Financial Intelligence Unit, Barbados",
+      "source_url": "https://www.fsc.gov.bb/viewPDF/documents/2023-05-16-19-31-31-moneylaunderingandfinancingofterrorismpreventionandcontrolact-2011-23.pdf",
+      "notes": "Establishes AML/CFT due-diligence duties, including ongoing customer due diligence. Does not specify a numeric dollar threshold for when screening is required, so screening_required_above_amount remains an internal-policy value."
+    },
+    {
+      "source_type": "external_regulation",
+      "citation": "CFATF (Caribbean Financial Action Task Force) member compliance with the FATF Recommendations",
+      "jurisdiction": "CARICOM / Caribbean regional",
+      "authority": "CFATF",
+      "source_url": "https://www.fatf-gafi.org/en/countries/global-network/caribbean-financial-action-task-force--cfatf-.html",
+      "notes": "Barbados is a CFATF member jurisdiction; CFATF monitors implementation of the FATF Recommendations, which is the basis for sanctions/watchlist screening as a compliance expectation."
+    },
+    {
+      "source_type": "internal_policy",
+      "citation": "Internal Vendor Due-Diligence Threshold Standard",
+      "jurisdiction": "Company-wide",
+      "notes": "Sets screening_required_above_amount and the new/high-risk vendor screening triggers. No numeric regulatory floor was found for these values."
+    }
+  ]
 }

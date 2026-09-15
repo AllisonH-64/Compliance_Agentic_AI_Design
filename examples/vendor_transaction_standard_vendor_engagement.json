@@ -1,0 +1,12 @@
+{
+  "case_id": "CASE-2022",
+  "transaction_id": "PO-5022",
+  "control_id": "PROC-PART-TIME-CONTRACT-001",
+  "vendor_name": "Acme Office Supplies",
+  "requestor_role": "office_manager",
+  "amount": 450,
+  "currency": "USD",
+  "business_justification": "Quarterly office supply restock.",
+  "vendor_engagement_type": "standard_vendor",
+  "prior_flagged_transactions_12m": 0
+}

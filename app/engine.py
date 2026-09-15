@@ -10,11 +10,13 @@ from app.models import (
     DecisionState,
     MarketRiskLevel,
     NotificationRecipient,
+    PolicyReferenceType,
     RiskBand,
     ReviewQueueMetrics,
     ReviewStatus,
     RuleMetadata,
     SignalFrequency,
+    VendorEngagementType,
     VendorTransaction,
 )
 
@@ -24,13 +26,46 @@ DEFAULT_SLA_HOURS = 24.0
 VENDOR_ESCALATION_VERSION = "vendor-due-diligence-v1"
 
 
+def validate_no_internal_policy_conflicts(rule: RuleMetadata) -> list[str]:
+    """A rule's internal escalation_triggers values must not be looser than any
+    verified regulatory floor declared on its own external_regulation policy
+    references. Returns human-readable conflict descriptions; an empty list means
+    no conflicts. Only checks trigger keys where a real, verified minimum has been
+    entered (minimum_threshold_field/minimum_threshold_value) — this deliberately
+    does not invent numeric floors that weren't confirmed by research."""
+    conflicts: list[str] = []
+    triggers = rule.escalation_triggers or {}
+
+    for reference in rule.policy_references:
+        if reference.source_type != PolicyReferenceType.EXTERNAL_REGULATION:
+            continue
+        if reference.minimum_threshold_field is None or reference.minimum_threshold_value is None:
+            continue
+
+        internal_value = triggers.get(reference.minimum_threshold_field)
+        if isinstance(internal_value, (int, float)) and internal_value > reference.minimum_threshold_value:
+            conflicts.append(
+                f"{rule.control_id}: internal trigger '{reference.minimum_threshold_field}' "
+                f"({internal_value}) is looser than the regulatory minimum "
+                f"({reference.minimum_threshold_value}) required by '{reference.citation}'."
+            )
+
+    return conflicts
+
+
 def load_rules() -> list[RuleMetadata]:
     rules: list[RuleMetadata] = []
 
     for rule_path in sorted(RULES_DIR.glob("*.json")):
         with rule_path.open("r", encoding="utf-8") as rule_file:
             raw_rule = json.load(rule_file)
-        rules.append(RuleMetadata(**raw_rule))
+        rule = RuleMetadata(**raw_rule)
+
+        conflicts = validate_no_internal_policy_conflicts(rule)
+        if conflicts:
+            raise ValueError("; ".join(conflicts))
+
+        rules.append(rule)
 
     return rules
 
@@ -85,6 +120,16 @@ def _build_base_evidence_references(vendor_transaction: VendorTransaction) -> li
 
         if vendor_transaction.receipt_record.document_id is not None:
             evidence_references.append(f"receipt_document:{vendor_transaction.receipt_record.document_id}")
+
+    evidence_references.append(f"vendor_engagement_type:{vendor_transaction.vendor_engagement_type.value}")
+
+    if vendor_transaction.misclassification_assessment_record is not None:
+        evidence_references.append("misclassification_assessment_record:attached")
+
+        if vendor_transaction.misclassification_assessment_record.document_id is not None:
+            evidence_references.append(
+                f"misclassification_assessment_document:{vendor_transaction.misclassification_assessment_record.document_id}"
+            )
 
     return evidence_references
 
@@ -781,6 +826,174 @@ def _evaluate_expense_receipt(
     )
 
 
+def _evaluate_part_time_contract_classification(
+    vendor_transaction: VendorTransaction,
+    rule: RuleMetadata,
+    evaluated_at: str,
+) -> DecisionRecord:
+    """Evaluate part-time/temporary contract vendor engagements for worker-
+    misclassification risk. A standard vendor engagement skips this scrutiny
+    entirely and clears at low risk."""
+    evidence_references = _build_base_evidence_references(vendor_transaction)
+
+    escalation_triggers = rule.escalation_triggers or {}
+    review_required_above_hours = escalation_triggers.get(
+        "misclassification_review_required_above_hours_per_week", 20
+    )
+    risk_medium = escalation_triggers.get("risk_score_medium", 4)
+    risk_high = escalation_triggers.get("risk_score_high", 6)
+    risk_critical = escalation_triggers.get("risk_score_critical", 8)
+
+    elevated_engagement = vendor_transaction.vendor_engagement_type in (
+        VendorEngagementType.PART_TIME_CONTRACT,
+        VendorEngagementType.TEMPORARY_STAFFING,
+    )
+
+    if not elevated_engagement:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.APPROVED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Standard vendor engagement; no elevated worker-classification scrutiny required.",
+            severity_score=0.1,
+            confidence_score=0.9,
+            recommended_action="Approve and log. No further action required.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.LOW,
+            risk_score=0.1,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="auto_close",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=False,
+            review_status=ReviewStatus.NOT_REQUIRED,
+            rule_metadata=rule,
+        )
+
+    record = vendor_transaction.misclassification_assessment_record
+
+    if record is None or not record.completed:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.INSUFFICIENT_EVIDENCE,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                "Part-time/temporary contract engagement requires a completed worker-classification "
+                "risk assessment, but none is on file."
+            ),
+            severity_score=0.6,
+            confidence_score=0.85,
+            recommended_action="Request a completed worker-classification risk assessment before this engagement proceeds.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.6,
+            triggered_signal_ids=["SIG-MISSING-MISCLASSIFICATION-ASSESSMENT"],
+            signal_rationale=["Part-time/temporary contract engagements require a documented worker-classification assessment."],
+            escalation_decision="queue_for_assessment",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if record.classification_confirmed_as_contractor is False:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.HUMAN_REVIEW_REQUIRED,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                "Assessment indicates this engagement may function as part-time employment rather than "
+                "an independent-contractor relationship."
+            ),
+            severity_score=0.75,
+            confidence_score=0.85,
+            recommended_action="Route to Legal and HR for a reclassification review before this engagement continues.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.75,
+            triggered_signal_ids=["SIG-POSSIBLE-WORKER-MISCLASSIFICATION"],
+            signal_rationale=[
+                "Worker-classification assessment suggests the engagement resembles employment, not an independent-contractor vendor relationship."
+            ],
+            escalation_decision="queue_for_reclassification_review",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if record.classification_confirmed_as_contractor is None:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.HUMAN_REVIEW_REQUIRED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Worker-classification assessment is on file but a determination is still pending.",
+            severity_score=0.55,
+            confidence_score=0.8,
+            recommended_action="Route to compliance manager for a classification determination before this engagement proceeds.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.MEDIUM,
+            risk_score=0.55,
+            triggered_signal_ids=["SIG-MISCLASSIFICATION-DETERMINATION-PENDING"],
+            signal_rationale=["A worker-classification determination has not yet been made."],
+            escalation_decision="queue_for_determination",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    # classification_confirmed_as_contractor is True: still carries an elevated
+    # baseline risk relative to a standard vendor, mirroring how a cleared
+    # conflict-of-interest case still routes to review rather than auto-closing.
+    base_risk = 2.0 + 4.0
+
+    if (record.hours_per_week or 0) >= review_required_above_hours:
+        base_risk += 1.5
+
+    if vendor_transaction.prior_flagged_transactions_12m >= 1:
+        base_risk += 1.0
+
+    base_risk = min(base_risk, 10.0)
+    risk_score = base_risk / 10.0
+    risk_band = _risk_band_for_score(base_risk, risk_medium, risk_high, risk_critical)
+    review_required = risk_band != RiskBand.LOW
+
+    if risk_band == RiskBand.CRITICAL:
+        action = "CRITICAL risk despite confirmed contractor classification. Immediate compliance manager review required."
+    elif risk_band == RiskBand.HIGH:
+        action = "Route to compliance manager for periodic reclassification review."
+    elif risk_band == RiskBand.MEDIUM:
+        action = "Log for standard compliance review."
+    else:
+        action = "Approve and log. No further action required."
+
+    return DecisionRecord(
+        case_id=vendor_transaction.case_id,
+        transaction_id=vendor_transaction.transaction_id,
+        decision=DecisionState.APPROVED,
+        evaluated_at=evaluated_at,
+        reasoning_summary=f"Part-time/temporary contract engagement evaluated with risk score {base_risk:.1f}/10.",
+        severity_score=risk_score,
+        confidence_score=0.85,
+        recommended_action=action,
+        evidence_references=evidence_references,
+        risk_band=risk_band,
+        risk_score=risk_score,
+        triggered_signal_ids=[],
+        signal_rationale=[],
+        escalation_decision="auto_close" if not review_required else "queue_for_review",
+        escalation_policy_version=VENDOR_ESCALATION_VERSION,
+        review_required=review_required,
+        review_status=ReviewStatus.PENDING if review_required else ReviewStatus.NOT_REQUIRED,
+        rule_metadata=rule,
+    )
+
+
 def _determine_escalation_recipients(rule: RuleMetadata, risk_band: RiskBand) -> list[NotificationRecipient]:
     """Look up which stakeholder groups to notify for this risk band, per the rule's
     versioned notification policy. An unconfigured rule or band notifies no one rather
@@ -797,7 +1010,9 @@ def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecor
     evaluated_at = datetime.now(UTC).isoformat()
 
     if rule.control_domain == "procurement":
-        if "RECEIPT" in rule.control_id:
+        if "PART-TIME" in rule.control_id:
+            decision_record = _evaluate_part_time_contract_classification(vendor_transaction, rule, evaluated_at)
+        elif "RECEIPT" in rule.control_id:
             decision_record = _evaluate_expense_receipt(vendor_transaction, rule, evaluated_at)
         elif "COI" in rule.control_id:
             decision_record = _evaluate_conflict_of_interest(vendor_transaction, rule, evaluated_at)

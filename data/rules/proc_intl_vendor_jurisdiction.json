@@ -24,5 +24,29 @@
       "high": ["procurement", "legal"],
       "critical": ["procurement", "legal", "finance"]
     }
-  }
+  },
+  "policy_references": [
+    {
+      "source_type": "external_regulation",
+      "citation": "CFATF (Caribbean Financial Action Task Force) high-risk and monitored jurisdictions guidance",
+      "jurisdiction": "CARICOM / Caribbean regional",
+      "authority": "CFATF",
+      "source_url": "https://www.fatf-gafi.org/en/publications/High-risk-and-other-monitored-jurisdictions/Cfatfpublicstatement.html",
+      "notes": "Basis for treating certain jurisdictions as requiring enhanced due diligence. high_risk_country_codes in this control is an internal working list, not a verbatim copy of any single published list, so it remains an internal-policy value."
+    },
+    {
+      "source_type": "external_regulation",
+      "citation": "Barbados Public Procurement Act, 2021 (Act No. 30 of 2021)",
+      "jurisdiction": "Barbados",
+      "authority": "Office of the Chief Procurement Officer, Barbados",
+      "source_url": "https://leap.unep.org/en/countries/bb/national-legislation/public-procurement-act-no-30-2021",
+      "notes": "Applies the CARICOM Protocol on Procurement to cross-border/international vendor engagements."
+    },
+    {
+      "source_type": "internal_policy",
+      "citation": "Internal High-Risk Jurisdiction and Enhanced Due-Diligence Standard",
+      "jurisdiction": "Company-wide",
+      "notes": "Sets high_risk_country_codes and enhanced_dd_required_above_amount. No single verified numeric or list-based regulatory floor was found to check these against."
+    }
+  ]
 }

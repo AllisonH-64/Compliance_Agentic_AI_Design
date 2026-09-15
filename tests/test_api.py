@@ -7,7 +7,9 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
+from app.engine import validate_no_internal_policy_conflicts
 from app.main import app
+from app.models import PolicyReference, PolicyReferenceType, RuleMetadata
 from app.storage import get_db_path, get_decision, save_decision, set_db_path
 
 
@@ -427,13 +429,14 @@ def test_dashboard_summary_aggregates_by_control_and_signal(tmp_path: Path) -> N
     assert payload["total_insufficient_evidence"] == 2
 
     controls_by_id = {control["control_id"]: control for control in payload["controls"]}
-    # All five known controls should appear even if some had zero traffic.
+    # All six known controls should appear even if some had zero traffic.
     assert set(controls_by_id) == {
         "PROC-SPEND-APPROVAL-001",
         "PROC-VENDOR-DUEDILIGENCE-001",
         "PROC-INTL-VENDOR-001",
         "PROC-VENDOR-COI-001",
         "PROC-EXPENSE-RECEIPT-001",
+        "PROC-PART-TIME-CONTRACT-001",
     }
 
     spend_approval = controls_by_id["PROC-SPEND-APPROVAL-001"]
@@ -1131,6 +1134,173 @@ def test_receipt_matched_with_prior_flag_routes_to_review(tmp_path: Path) -> Non
     assert payload["review_required"] is True
     assert payload["risk_band"] == "medium"
     assert payload["escalation_decision"] == "queue_for_review"
+
+
+def test_part_time_missing_assessment_requires_evidence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "part-time-missing-assessment.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-part-time-missing-assessment-1",
+            "transaction_id": "po-part-time-missing-assessment-1",
+            "control_id": "PROC-PART-TIME-CONTRACT-001",
+            "vendor_name": "Marcus Alleyne Consulting",
+            "requestor_role": "operations_manager",
+            "amount": 600,
+            "currency": "BBD",
+            "business_justification": "Part-time bookkeeping support, roughly 15 hours per week.",
+            "vendor_engagement_type": "part_time_contract",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["review_required"] is True
+    assert "SIG-MISSING-MISCLASSIFICATION-ASSESSMENT" in payload["triggered_signal_ids"]
+
+
+def test_part_time_possible_misclassification_requires_human_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "part-time-misclassification.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-part-time-misclassification-1",
+            "transaction_id": "po-part-time-misclassification-1",
+            "control_id": "PROC-PART-TIME-CONTRACT-001",
+            "vendor_name": "Marcus Alleyne Consulting",
+            "requestor_role": "operations_manager",
+            "amount": 600,
+            "currency": "BBD",
+            "business_justification": "Part-time bookkeeping support, fixed schedule set by the company.",
+            "vendor_engagement_type": "part_time_contract",
+            "misclassification_assessment_record": {
+                "completed": True,
+                "classification_confirmed_as_contractor": False,
+                "hours_per_week": 25,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "human_review_required"
+    assert payload["review_required"] is True
+    assert "SIG-POSSIBLE-WORKER-MISCLASSIFICATION" in payload["triggered_signal_ids"]
+
+
+def test_part_time_confirmed_contractor_still_routes_to_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "part-time-confirmed.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-part-time-confirmed-1",
+            "transaction_id": "po-part-time-confirmed-1",
+            "control_id": "PROC-PART-TIME-CONTRACT-001",
+            "vendor_name": "Marcus Alleyne Consulting",
+            "requestor_role": "operations_manager",
+            "amount": 600,
+            "currency": "BBD",
+            "business_justification": "Part-time bookkeeping support, self-directed schedule.",
+            "vendor_engagement_type": "part_time_contract",
+            "misclassification_assessment_record": {
+                "completed": True,
+                "classification_confirmed_as_contractor": True,
+                "hours_per_week": 10,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is True
+    assert payload["risk_band"] in ("high", "critical")
+
+
+def test_standard_vendor_engagement_skips_classification_scrutiny(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "part-time-standard.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-part-time-standard-1",
+            "transaction_id": "po-part-time-standard-1",
+            "control_id": "PROC-PART-TIME-CONTRACT-001",
+            "vendor_name": "Acme Office Supplies",
+            "requestor_role": "office_manager",
+            "amount": 450,
+            "currency": "USD",
+            "business_justification": "Quarterly office supply restock.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is False
+    assert payload["risk_band"] == "low"
+    assert payload["escalation_decision"] == "auto_close"
+
+
+def test_validate_no_internal_policy_conflicts_detects_looser_internal_trigger() -> None:
+    rule = RuleMetadata(
+        control_id="TEST-CONTROL-001",
+        control_domain="procurement",
+        policy_name="Test Control",
+        policy_version="2026-01-01",
+        description="Synthetic rule for conflict-check testing.",
+        required_evidence=[],
+        escalation_triggers={"single_approval_amount": 5000},
+        policy_references=[
+            PolicyReference(
+                source_type=PolicyReferenceType.EXTERNAL_REGULATION,
+                citation="Synthetic Test Regulation",
+                jurisdiction="Testland",
+                minimum_threshold_field="single_approval_amount",
+                minimum_threshold_value=1000,
+            )
+        ],
+    )
+
+    conflicts = validate_no_internal_policy_conflicts(rule)
+
+    assert len(conflicts) == 1
+    assert "single_approval_amount" in conflicts[0]
+
+
+def test_validate_no_internal_policy_conflicts_passes_when_stricter_or_equal() -> None:
+    rule = RuleMetadata(
+        control_id="TEST-CONTROL-002",
+        control_domain="procurement",
+        policy_name="Test Control",
+        policy_version="2026-01-01",
+        description="Synthetic rule for conflict-check testing.",
+        required_evidence=[],
+        escalation_triggers={"single_approval_amount": 500},
+        policy_references=[
+            PolicyReference(
+                source_type=PolicyReferenceType.EXTERNAL_REGULATION,
+                citation="Synthetic Test Regulation",
+                jurisdiction="Testland",
+                minimum_threshold_field="single_approval_amount",
+                minimum_threshold_value=1000,
+            )
+        ],
+    )
+
+    assert validate_no_internal_policy_conflicts(rule) == []
 
 
 def test_review_metrics_counts_sla_breach_for_aged_case(tmp_path: Path) -> None:

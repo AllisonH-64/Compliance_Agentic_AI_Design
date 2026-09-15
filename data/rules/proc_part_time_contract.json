@@ -1,0 +1,43 @@
+{
+  "control_id": "PROC-PART-TIME-CONTRACT-001",
+  "control_domain": "procurement",
+  "policy_name": "Part-Time and Temporary Contract Worker Classification Policy",
+  "policy_version": "2026-09-01",
+  "description": "Vendor engagements structured as part-time contract or temporary staffing arrangements require a completed worker-classification risk assessment before spend is incurred, to guard against treating what is functionally part-time employment as an independent-contractor vendor relationship.",
+  "severity_threshold": 4,
+  "required_evidence": [
+    "misclassification_assessment_record"
+  ],
+  "required_reviewer_role": "compliance_manager",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "misclassification_review_required_above_hours_per_week": 20,
+    "risk_score_medium": 4,
+    "risk_score_high": 6,
+    "risk_score_critical": 8,
+    "notification_recipients": {
+      "low": [],
+      "medium": ["procurement"],
+      "high": ["procurement", "legal"],
+      "critical": ["procurement", "legal", "finance"]
+    }
+  },
+  "policy_references": [
+    {
+      "source_type": "external_regulation",
+      "citation": "Employment Rights Act, 2012 (Act 2012-9)",
+      "jurisdiction": "Barbados",
+      "authority": "Ministry of Labour, Barbados",
+      "source_url": "https://labour.gov.bb/wp-content/uploads/2019/10/Employment-Rights-Act-2012.pdf",
+      "notes": "Sets statutory minimum protections for employees, including part-time, temporary, and casual workers (e.g. written particulars of employment, itemised pay statements, minimum notice of termination). Independent contractors fall outside these protections, which is exactly why accurate classification of a 'vendor' engagement matters. The Act does not specify a numeric weekly-hours threshold for part-time status, so misclassification_review_required_above_hours_per_week is an internal risk-management heuristic, not a legal citation-backed number."
+    },
+    {
+      "source_type": "internal_policy",
+      "citation": "Internal Worker Classification Risk Standard",
+      "jurisdiction": "Company-wide",
+      "notes": "Sets the hours-per-week review trigger. Must not be set so high that it would exclude engagements that would qualify as part-time employment under the Employment Rights Act, 2012 once a verified numeric threshold is confirmed."
+    }
+  ]
+}

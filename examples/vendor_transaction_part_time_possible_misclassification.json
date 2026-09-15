@@ -1,0 +1,17 @@
+{
+  "case_id": "CASE-2020",
+  "transaction_id": "PO-5020",
+  "control_id": "PROC-PART-TIME-CONTRACT-001",
+  "vendor_name": "Marcus Alleyne Consulting",
+  "requestor_role": "operations_manager",
+  "amount": 600,
+  "currency": "BBD",
+  "business_justification": "Part-time bookkeeping support, roughly 25 hours per week, fixed schedule set by the company.",
+  "vendor_engagement_type": "part_time_contract",
+  "misclassification_assessment_record": {
+    "completed": true,
+    "classification_confirmed_as_contractor": false,
+    "hours_per_week": 25
+  },
+  "prior_flagged_transactions_12m": 0
+}

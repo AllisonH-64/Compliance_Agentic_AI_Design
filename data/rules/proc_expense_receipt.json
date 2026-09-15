@@ -24,5 +24,13 @@
       "high": ["procurement", "finance"],
       "critical": ["procurement", "finance", "legal"]
     }
-  }
+  },
+  "policy_references": [
+    {
+      "source_type": "internal_policy",
+      "citation": "Internal Expense Receipt Documentation Standard",
+      "jurisdiction": "Company-wide",
+      "notes": "No dedicated Barbados statute for receipt documentation thresholds was identified during research; this is treated as a general bookkeeping/internal-controls practice rather than a specific regulatory requirement, and is documented here as internal policy only."
+    }
+  ]
 }

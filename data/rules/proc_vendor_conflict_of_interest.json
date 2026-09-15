@@ -23,5 +23,13 @@
       "high": ["procurement", "legal"],
       "critical": ["procurement", "legal", "finance"]
     }
-  }
+  },
+  "policy_references": [
+    {
+      "source_type": "internal_policy",
+      "citation": "Internal Vendor Conflict of Interest Standard",
+      "jurisdiction": "Company-wide",
+      "notes": "No confirmed, currently-enacted Barbados private-sector conflict-of-interest statute was found. The Integrity in Public Life Bill (which would cover public officials, not private-sector vendor relationships) failed in the Senate in 2020 and was reintroduced in 2023, passing the Lower House per contemporaneous reporting, but enactment/Senate passage was not confirmed as of this research. This control therefore rests on internal policy alone; revisit if that Act's status is confirmed."
+    }
+  ]
 }

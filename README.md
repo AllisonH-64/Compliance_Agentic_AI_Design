@@ -4,7 +4,7 @@ This repository defines a practical framework for an Agentic AI system that gate
 
 ## Current status
 
-This repository contains the design foundation and a FastAPI MVP with five procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
+This repository contains the design foundation and a FastAPI MVP with six procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
 
 It also includes workspace customization for Copilot:
 
@@ -27,9 +27,25 @@ It also includes workspace customization for Copilot:
 - `PROC-INTL-VENDOR-001`: vendors based in a designated high-risk jurisdiction (versioned country-code list in the rule catalog), or spend at or above the enhanced due-diligence threshold, require completed screening plus enhanced due-diligence sign-off (e.g. local counsel review)
 - `PROC-VENDOR-COI-001`: a flagged potential conflict of interest between the requestor and the vendor requires formal disclosure and an explicit compliance clearance decision; a cleared conflict still routes to mandatory review rather than auto-closing
 - `PROC-EXPENSE-RECEIPT-001`: expenses at or above the receipt threshold require an attached itemized receipt; a receipt total that doesn't reconcile with the claimed amount within tolerance routes to human review
+- `PROC-PART-TIME-CONTRACT-001`: vendor engagements structured as part-time contract or temporary staffing require a completed worker-classification risk assessment; an assessment suggesting the engagement functions as employment routes to human review rather than an outright block, since the fix is reclassification, not refusal — a confirmed-compliant engagement still routes to review given the elevated baseline risk of this engagement type
 - severity-based escalation: transactions are classified into risk bands (LOW, MEDIUM, HIGH, CRITICAL) with corresponding escalation actions
 - escalation notifications: each control has a versioned, risk-band-driven policy (in its rule catalog) for which stakeholder groups (Procurement, Legal, Finance) to notify; a decision's `escalation_recipients` field is computed from that policy rather than hardcoded
+- policy traceability: every control's rule catalog carries a `policy_references` list citing the external regulation/standard it maps to (where one was confirmed) and/or the company's own internal policy — see "Regulatory sourcing" below
 - output: structured compliance decision record with severity scores, risk metadata, escalation recipients, and review state
+
+## Regulatory sourcing (Barbados/Caribbean, for now)
+
+Each control's `data/rules/*.json` catalog carries a `policy_references` list, tagged `external_regulation` or `internal_policy`, so every rule evaluation maps back to something citable rather than an invented label. This was researched, not assumed — real sources found:
+
+- **Barbados Public Procurement Act, 2021 (Act No. 30 of 2021)** and the **CARICOM Protocol on Procurement** — `PROC-SPEND-APPROVAL-001`, `PROC-INTL-VENDOR-001`
+- **Money Laundering and Financing of Terrorism (Prevention and Control) Act, 2011-23** and **CFATF** (Caribbean Financial Action Task Force) FATF-Recommendations compliance — `PROC-VENDOR-DUEDILIGENCE-001`, `PROC-INTL-VENDOR-001`
+- **Employment Rights Act, 2012 (Act 2012-9)** — `PROC-PART-TIME-CONTRACT-001`
+
+Two honesty gaps, left as gaps rather than papered over: no confirmed, currently-enacted Barbados private-sector conflict-of-interest statute was found (the Integrity in Public Life Bill failed in the Senate in 2020 and was reintroduced in 2023, but I found no confirmation of Senate passage or entry into force, so it isn't cited), so `PROC-VENDOR-COI-001` is internal-policy-only; and no dedicated Barbados receipt-documentation statute was found, so `PROC-EXPENSE-RECEIPT-001` is internal-policy-only too. Neither of these should be read as "no regulation exists" — only that this pass didn't confirm one.
+
+None of the researched sources gave a verified numeric threshold (a specific dollar approval amount, a specific part-time-hours cutoff), so every threshold in `escalation_triggers` remains an internal-policy value — nothing here should be read as a legally-mandated number.
+
+`app/engine.py`'s `validate_no_internal_policy_conflicts()` is the enforcement point for internal rules living alongside a regulation: a `PolicyReference` can declare `minimum_threshold_field`/`minimum_threshold_value` when a real regulatory floor is confirmed for one of a control's trigger keys, and `load_rules()` refuses to load any catalog whose internal trigger value is looser than that floor. It's currently a no-op against the shipped catalogs (no numeric floors have been confirmed yet) but is exercised directly in `tests/test_api.py` against a synthetic conflicting rule.
 
 ## Run locally
 
@@ -71,7 +87,7 @@ Temporary migration fallback:
 
 ## Validated behavior
 
-- both procurement rule catalogs load through the API
+- all six procurement rule catalogs load through the API, each with populated `policy_references`
 - transaction risk is calculated based on spend amount, vendor risk level, new-vendor status, and prior flagged transactions
 - missing required approval or vendor screening evidence returns `insufficient_evidence` and queues the case for review
 - an explicit approval denial or failed sanctions/watchlist screening returns `blocked` at CRITICAL risk
@@ -83,6 +99,8 @@ Temporary migration fallback:
 - summary reporting includes severity-band distributions for governance oversight
 - the dashboard summary breaks decisions down per control (including controls with zero traffic) and surfaces the most frequently triggered risk signals
 - escalation recipients (Procurement, Legal, Finance) are computed per decision from each control's versioned, risk-band notification policy, and the dashboard aggregates pending notification counts by recipient group
+- a part-time/temporary contract vendor engagement without a completed worker-classification assessment returns `insufficient_evidence`; an assessment suggesting the engagement resembles employment returns `human_review_required` rather than a block; a standard vendor engagement skips this scrutiny entirely
+- `validate_no_internal_policy_conflicts()` blocks catalog loading if an internal trigger value is ever looser than a declared regulatory floor
 - signed bearer token auth is enforced on protected endpoints with key-id support and optional legacy header fallback
 - role-based access controls protect sensitive transaction and review data
 - append-only decision and review history is preserved alongside current case state
@@ -90,4 +108,7 @@ Temporary migration fallback:
 ## Next steps
 
 - wire `escalation_recipients` to an actual outbound channel (email/Slack) once real distribution lists exist; today it's a computed, auditable field rather than a sent notification
+- confirm the status of the Integrity in Public Life Act and, if enacted, add it as `PROC-VENDOR-COI-001`'s external regulation reference
+- extend regulatory sourcing beyond Barbados/Caribbean to other jurisdictions as the vendor base grows
+- confirm real numeric regulatory floors (approval-dollar thresholds, part-time-hours definitions) where they exist, so `validate_no_internal_policy_conflicts()` has something concrete to enforce
 - decide whether the previous employee-conduct domain content (`docs/ethics_workflow.md` and related narrative docs) should be archived, ported to a separate deployment, or retired

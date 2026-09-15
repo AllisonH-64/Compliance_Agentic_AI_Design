@@ -24,5 +24,29 @@
       "high": ["procurement", "finance"],
       "critical": ["procurement", "finance", "legal"]
     }
-  }
+  },
+  "policy_references": [
+    {
+      "source_type": "external_regulation",
+      "citation": "Barbados Public Procurement Act, 2021 (Act No. 30 of 2021)",
+      "jurisdiction": "Barbados",
+      "authority": "Office of the Chief Procurement Officer, Barbados",
+      "source_url": "https://leap.unep.org/en/countries/bb/national-legislation/public-procurement-act-no-30-2021",
+      "notes": "Requires vendor registration with the Chief Procurement Officer and states the CARICOM Protocol on Procurement prevails in case of conflict. Does not specify a numeric approval-dollar threshold, so single_approval_amount/dual_approval_amount remain internal-policy values, not regulatory citations."
+    },
+    {
+      "source_type": "external_regulation",
+      "citation": "Protocol on Procurement for the Caribbean Community",
+      "jurisdiction": "CARICOM / Caribbean regional",
+      "authority": "CARICOM",
+      "source_url": "https://caricom.org/treaties/protocol-procurement-for-the-caribbean-community/",
+      "notes": "Regional procurement harmonization instrument referenced by the Barbados Public Procurement Act, 2021."
+    },
+    {
+      "source_type": "internal_policy",
+      "citation": "Internal Spend Approval Threshold Standard",
+      "jurisdiction": "Company-wide",
+      "notes": "Sets single_approval_amount and dual_approval_amount. No numeric regulatory floor was found for these values, so validate_no_internal_policy_conflicts has nothing to check against yet for this control."
+    }
+  ]
 }

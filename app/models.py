@@ -54,6 +54,17 @@ class NotificationRecipient(str, Enum):
     FINANCE = "finance"
 
 
+class PolicyReferenceType(str, Enum):
+    EXTERNAL_REGULATION = "external_regulation"
+    INTERNAL_POLICY = "internal_policy"
+
+
+class VendorEngagementType(str, Enum):
+    STANDARD_VENDOR = "standard_vendor"
+    PART_TIME_CONTRACT = "part_time_contract"
+    TEMPORARY_STAFFING = "temporary_staffing"
+
+
 class ReopenReason(str, Enum):
     NEW_EVIDENCE = "new_evidence"
     POLICY_UPDATE = "policy_update"
@@ -84,6 +95,33 @@ class ReceiptRecord(BaseModel):
         description="Total amount shown on the attached receipt, for reconciliation against the claimed amount",
     )
     document_id: str | None = Field(default=None, description="Identifier for the receipt document")
+
+
+class MisclassificationAssessmentRecord(BaseModel):
+    completed: bool = Field(..., description="Whether a worker-classification risk assessment has been completed")
+    classification_confirmed_as_contractor: bool | None = Field(
+        default=None,
+        description="Assessment outcome: True confirmed independent contractor, False looks like employment, None still pending",
+    )
+    hours_per_week: float | None = Field(default=None, description="Typical hours per week worked under this engagement")
+    document_id: str | None = Field(default=None, description="Identifier for the classification assessment document")
+
+
+class PolicyReference(BaseModel):
+    source_type: PolicyReferenceType
+    citation: str = Field(..., description="Name/title of the regulation, standard, or internal policy")
+    jurisdiction: str = Field(..., description="Jurisdiction the reference applies to, e.g. 'Barbados' or 'Company-wide'")
+    authority: str | None = Field(default=None, description="Issuing body, e.g. a regulator or internal compliance function")
+    source_url: str | None = Field(default=None, description="Link to the primary source")
+    notes: str | None = Field(default=None, description="Context, caveats, or scope notes for this reference")
+    minimum_threshold_field: str | None = Field(
+        default=None,
+        description="For an external_regulation reference only: the escalation_triggers key this reference sets a verified floor for, if any",
+    )
+    minimum_threshold_value: float | None = Field(
+        default=None,
+        description="The verified regulatory minimum for minimum_threshold_field; internal trigger values must not be looser than this",
+    )
 
 
 class VendorScreeningRecord(BaseModel):
@@ -150,6 +188,14 @@ class VendorTransaction(BaseModel):
         default=None,
         description="Receipt or itemized invoice evidence attached to the expense",
     )
+    vendor_engagement_type: VendorEngagementType = Field(
+        default=VendorEngagementType.STANDARD_VENDOR,
+        description="Nature of the engagement; part-time/temporary contract engagements carry worker-misclassification risk",
+    )
+    misclassification_assessment_record: MisclassificationAssessmentRecord | None = Field(
+        default=None,
+        description="Worker-classification risk assessment evidence for part-time/temporary contract engagements",
+    )
     prior_flagged_transactions_12m: int = Field(
         default=0,
         ge=0,
@@ -168,6 +214,10 @@ class RuleMetadata(BaseModel):
     required_reviewer_role: str | None = None
     international_applicability: list[str] = Field(default_factory=lambda: ["ALL"])
     escalation_triggers: dict | None = Field(default=None, description="Conditions that trigger escalation")
+    policy_references: list[PolicyReference] = Field(
+        default_factory=list,
+        description="Regulations, standards, or internal policies this control maps back to",
+    )
 
 
 class DecisionRecord(BaseModel):
