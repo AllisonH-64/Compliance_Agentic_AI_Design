@@ -62,6 +62,8 @@ None of the researched sources gave a verified numeric threshold (a specific dol
 3. Start the API with `uvicorn app.main:app --reload`.
 4. Open `http://127.0.0.1:8000/docs` for the interactive API docs.
 
+For quick manual testing without minting a JWT, run `python dev_server.py` instead — it sets `COMPLIANCE_ALLOW_INSECURE_HEADERS=true` so protected endpoints accept plain `X-User-Id`/`X-User-Role` headers.
+
 Protected endpoints require bearer authentication:
 
 - `Authorization: Bearer <signed_token>`

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "compliance-gate-dev",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["dev_server.py"],
+      "port": 8000
+    }
+  ]
+}
