@@ -1,0 +1,23 @@
+{
+  "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+  "control_domain": "procurement",
+  "policy_name": "Vendor Due Diligence and Screening Policy",
+  "policy_version": "2026-09-01",
+  "description": "New vendors, high-risk vendors, and spend at or above the screening threshold require completed due-diligence screening, including a sanctions/watchlist check, before spend is incurred.",
+  "severity_threshold": 4,
+  "required_evidence": [
+    "vendor_screening_record"
+  ],
+  "required_reviewer_role": "compliance_analyst",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "screening_required_above_amount": 5000,
+    "new_vendor_requires_screening": true,
+    "high_risk_vendor_requires_screening": true,
+    "risk_score_medium": 4,
+    "risk_score_high": 6,
+    "risk_score_critical": 8
+  }
+}

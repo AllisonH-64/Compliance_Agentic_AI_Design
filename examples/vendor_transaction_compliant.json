@@ -1,0 +1,17 @@
+{
+  "case_id": "CASE-2001",
+  "transaction_id": "PO-5001",
+  "control_id": "PROC-SPEND-APPROVAL-001",
+  "vendor_name": "Acme Office Supplies",
+  "vendor_id": "VEND-1042",
+  "new_vendor": false,
+  "vendor_risk_level": "low",
+  "requestor_role": "office_manager",
+  "amount": 450,
+  "currency": "USD",
+  "country_code": "US",
+  "business_justification": "Quarterly office supply restock.",
+  "approval_record": null,
+  "vendor_screening_record": null,
+  "prior_flagged_transactions_12m": 0
+}

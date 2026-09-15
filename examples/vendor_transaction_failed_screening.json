@@ -1,0 +1,27 @@
+{
+  "case_id": "CASE-2004",
+  "transaction_id": "PO-5004",
+  "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+  "vendor_name": "Starline Trading Co",
+  "vendor_id": "VEND-4090",
+  "new_vendor": true,
+  "vendor_risk_level": "high",
+  "requestor_role": "procurement_lead",
+  "amount": 12000,
+  "currency": "USD",
+  "country_code": "AE",
+  "business_justification": "Bulk hardware procurement from an overseas supplier.",
+  "approval_record": {
+    "approver_role": "compliance_manager",
+    "approved": true
+  },
+  "second_approval_record": {
+    "approver_role": "finance_director",
+    "approved": true
+  },
+  "vendor_screening_record": {
+    "completed": true,
+    "sanctions_check_passed": false
+  },
+  "prior_flagged_transactions_12m": 0
+}

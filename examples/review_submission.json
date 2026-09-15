@@ -1,6 +1,6 @@
 {
-  "reviewer_id": "analyst_01",
-  "outcome": "overridden",
-  "final_decision": "compliant",
-  "notes": "The business host attached evidence of a previously approved hospitality exception. Case cleared after manual verification."
+  "reviewer_id": "analyst-1",
+  "outcome": "approved",
+  "final_decision": "approved",
+  "notes": "Vendor screening reviewed manually; spend cleared to proceed."
 }

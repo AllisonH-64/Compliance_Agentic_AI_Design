@@ -24,14 +24,16 @@ The system should answer five questions reliably:
 
 ## 2A. Recommended Project Framing
 
-For this repository, the clearest practical workflow is employee conduct incident compliance.
+For this repository, the clearest practical workflow is a vendor due-diligence gate over purchase-order spend.
 
 Why this workflow fits well:
 
-- it is a real Ethics and Compliance process, not just a finance control
-- it combines clear policy thresholds with ambiguous exceptions
-- it naturally requires human review for higher-risk cases
-- it is easy to model with a small MVP and expand later into anti-bribery risk factors
+- it combines clear policy thresholds (spend-approval amounts) with a genuine investigative check (vendor screening)
+- it naturally requires human review for higher-risk or higher-spend cases
+- it is easy to model with a small MVP (Section 26) and expand later into conflict-of-interest and jurisdiction-specific due-diligence rules
+- it targets a market segment (mid-market/SMB procurement) that established enterprise GRC vendors underserve, rather than the more saturated employee-conduct case-management space
+
+An earlier iteration of this repository implemented employee-conduct incident compliance (harassment, discrimination, client treatment, international governance) instead. That domain's rule catalogs and narrative docs were retired in favor of this framing; see `docs/mvp.md` for the current in-scope controls.
 
 ## 3. Design Principles
 

@@ -1,0 +1,22 @@
+{
+  "control_id": "PROC-SPEND-APPROVAL-001",
+  "control_domain": "procurement",
+  "policy_name": "Vendor Spend Approval Threshold Policy",
+  "policy_version": "2026-09-01",
+  "description": "Purchase orders and vendor spend at or above the approval threshold require an on-file approval before spend is incurred. Spend at or above the dual-approval threshold requires two independent approvals.",
+  "severity_threshold": 4,
+  "required_evidence": [
+    "approval_record"
+  ],
+  "required_reviewer_role": "compliance_analyst",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "single_approval_amount": 1000,
+    "dual_approval_amount": 10000,
+    "risk_score_medium": 4,
+    "risk_score_high": 6,
+    "risk_score_critical": 8
+  }
+}

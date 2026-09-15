@@ -1,37 +1,35 @@
 # MVP Scope
 
-This MVP implements an employee conduct compliance workflow with deterministic rule evaluation, risk-banded escalation, human investigation routing, and auditable lifecycle tracking.
+This MVP implements a vendor due-diligence gate with deterministic rule evaluation, risk-banded escalation, human review routing, and auditable lifecycle tracking.
 
 ## Current Program Scope
 
-The implemented program focuses on employee-conduct incidents rather than spend approvals.
+The implemented program focuses on vendor spend and due-diligence gating rather than employee conduct.
 
-- business activity: intake and triage of workplace conduct incidents
-- compliance problem: incidents require consistent policy application, severity classification, and accountable escalation
-- agent role: evaluate incident submissions, route investigations, and maintain a complete audit trail
+- business activity: intake and gating of purchase orders and vendor transactions before spend is incurred
+- compliance problem: spend requires consistent approval-threshold enforcement, vendor due-diligence screening, and accountable escalation
+- agent role: evaluate transaction submissions, route reviews, and maintain a complete audit trail
 
 ## In-Scope Controls
 
-- CONDUCT-HARASSMENT-001: harassment and bullying incident handling
-- CONDUCT-DISCRIMINATION-001: discrimination allegations and protected-characteristic sensitivity
-- CONDUCT-CLIENT-001: client treatment and relationship conduct concerns
-- CONDUCT-INTL-GOV-001: international governance and jurisdiction-sensitive conduct concerns
+- PROC-SPEND-APPROVAL-001: purchase-order spend-approval threshold and dual-approval enforcement
+- PROC-VENDOR-DUEDILIGENCE-001: vendor due-diligence and sanctions/watchlist screening requirements
 
 ## Decision Outcomes
 
-- policy_violation_confirmed
-- cleared
+- approved
+- blocked
 - insufficient_evidence
-- investigation_required
+- human_review_required
 
 ## Components
 
-- app/main.py exposes FastAPI endpoints for evaluation, investigation lifecycle, and reporting
-- app/engine.py loads rule catalogs and applies deterministic conduct evaluation logic
-- app/models.py defines incident, decision, and review schemas
+- app/main.py exposes FastAPI endpoints for evaluation, review lifecycle, and reporting
+- app/engine.py loads rule catalogs and applies deterministic procurement evaluation logic
+- app/models.py defines vendor-transaction, decision, and review schemas
 - app/storage.py persists current records plus append-only decision and review history
-- data/rules contains versioned control metadata for the four conduct controls
-- examples contains conduct-focused sample payloads for manual testing
+- data/rules contains versioned control metadata for the two procurement controls
+- examples contains vendor-transaction sample payloads for manual testing
 - tests/test_api.py contains API tests for auth, workflow, metrics, and summary behavior
 
 ## Audit Trail and Traceability
@@ -51,9 +49,9 @@ The implemented program focuses on employee-conduct incidents rather than spend 
 - optional issuer and audience enforcement via COMPLIANCE_AUTH_ISSUER and COMPLIANCE_AUTH_AUDIENCE
 - temporary migration fallback COMPLIANCE_ALLOW_INSECURE_HEADERS allows legacy headers when explicitly enabled
 
-## Investigation Lifecycle
+## Review Lifecycle
 
-- GET /reviews/queue returns active investigation queue items
+- GET /reviews/queue returns active review queue items
 - GET /reviews/metrics returns queue volume and SLA-aging metrics
 - POST /reviews/{case_id}/assign assigns a reviewer
 - POST /reviews/{case_id}/start transitions to in_review
@@ -63,16 +61,18 @@ The implemented program focuses on employee-conduct incidents rather than spend 
 
 ## Current Validation Status
 
-- verified: all conduct rule catalogs load via API endpoints
-- verified: deterministic incident evaluation returns structured decision records
+- verified: both procurement rule catalogs load via API endpoints
+- verified: deterministic transaction evaluation returns structured decision records
 - verified: assignment, start, submit, and reopen lifecycle transitions persist correctly
 - verified: append-only history captures decision and review lifecycle events
 - verified: queue metrics include status counts, SLA breach counts, and risk-band segmentation
-- verified: summary reporting includes totals, completed investigations, overrides, and reopen dimensions
+- verified: summary reporting includes totals, completed reviews, overrides, and reopen dimensions
 - verified: bearer auth, issuer/audience checks, and key-id trust behavior are covered by tests
+- verified: `/reports/summary` and `/reviews/{case_id}/reopen` — previously broken by a field-name mismatch and a missing enum member from the prior domain — now work and are covered by tests
 
 ## Immediate Next Build Step
 
-- align remaining legacy gift-domain tests and references to the conduct-domain schema
+- add jurisdiction-specific due-diligence requirements based on vendor country code
 - add explicit event emissions for risk computation and escalation transitions
-- extend summary outputs with median and p95 investigation turnaround metrics
+- extend summary outputs with median and p95 review turnaround metrics
+- decide the fate of the retired employee-conduct rule catalogs and narrative docs (archive vs. separate deployment)

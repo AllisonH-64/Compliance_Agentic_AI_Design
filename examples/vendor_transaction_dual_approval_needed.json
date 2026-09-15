@@ -1,0 +1,24 @@
+{
+  "case_id": "CASE-2005",
+  "transaction_id": "PO-5005",
+  "control_id": "PROC-SPEND-APPROVAL-001",
+  "vendor_name": "Kestrel Manufacturing",
+  "vendor_id": "VEND-5077",
+  "new_vendor": false,
+  "vendor_risk_level": "medium",
+  "requestor_role": "operations_manager",
+  "amount": 15000,
+  "currency": "USD",
+  "country_code": "US",
+  "business_justification": "Custom tooling order for the new production line.",
+  "approval_record": {
+    "approver_role": "compliance_manager",
+    "approved": true
+  },
+  "second_approval_record": null,
+  "vendor_screening_record": {
+    "completed": true,
+    "sanctions_check_passed": true
+  },
+  "prior_flagged_transactions_12m": 0
+}

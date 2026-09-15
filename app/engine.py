@@ -6,19 +6,18 @@ from app.models import (
     DEFAULT_CONTROL_ID,
     DecisionRecord,
     DecisionState,
-    IncidentCategory,
-    InvolvedPartyRole,
+    MarketRiskLevel,
     RiskBand,
     ReviewQueueMetrics,
     ReviewStatus,
     RuleMetadata,
-    IncidentCase,
+    VendorTransaction,
 )
 
 
 RULES_DIR = Path(__file__).resolve().parents[1] / "data" / "rules"
 DEFAULT_SLA_HOURS = 24.0
-CONDUCT_ESCALATION_VERSION = "conduct-escalation-v1"
+VENDOR_ESCALATION_VERSION = "vendor-due-diligence-v1"
 
 
 def load_rules() -> list[RuleMetadata]:
@@ -40,370 +39,352 @@ def load_rule(control_id: str = DEFAULT_CONTROL_ID) -> RuleMetadata:
     raise ValueError(f"Unknown control_id: {control_id}")
 
 
-def _build_base_evidence_references(incident_case: IncidentCase) -> list[str]:
+def _build_base_evidence_references(vendor_transaction: VendorTransaction) -> list[str]:
     evidence_references = [
-        f"incident:{incident_case.incident_id}",
-        f"control:{incident_case.control_id}",
+        f"transaction:{vendor_transaction.transaction_id}",
+        f"control:{vendor_transaction.control_id}",
+        f"vendor:{vendor_transaction.vendor_id or vendor_transaction.vendor_name}",
     ]
 
-    if incident_case.incident_report is not None:
-        evidence_references.append("incident_report:attached")
+    if vendor_transaction.approval_record is not None:
+        evidence_references.append("approval_record:attached")
 
-        if incident_case.incident_report.document_id is not None:
-            evidence_references.append(f"incident_report_document:{incident_case.incident_report.document_id}")
+        if vendor_transaction.approval_record.document_id is not None:
+            evidence_references.append(f"approval_document:{vendor_transaction.approval_record.document_id}")
 
-    if incident_case.evidence_record is not None:
-        evidence_references.append("evidence_record:attached")
+    if vendor_transaction.second_approval_record is not None:
+        evidence_references.append("second_approval_record:attached")
 
-        if incident_case.evidence_record.document_id is not None:
-            evidence_references.append(f"evidence_document:{incident_case.evidence_record.document_id}")
+        if vendor_transaction.second_approval_record.document_id is not None:
+            evidence_references.append(
+                f"second_approval_document:{vendor_transaction.second_approval_record.document_id}"
+            )
+
+    if vendor_transaction.vendor_screening_record is not None:
+        evidence_references.append("vendor_screening_record:attached")
+
+        if vendor_transaction.vendor_screening_record.document_id is not None:
+            evidence_references.append(
+                f"vendor_screening_document:{vendor_transaction.vendor_screening_record.document_id}"
+            )
 
     return evidence_references
 
 
-def _evaluate_harassment_bullying_incident(
-    incident_case: IncidentCase,
+def _risk_band_for_score(base_risk: float, risk_medium: float, risk_high: float, risk_critical: float) -> RiskBand:
+    if base_risk >= risk_critical:
+        return RiskBand.CRITICAL
+    if base_risk >= risk_high:
+        return RiskBand.HIGH
+    if base_risk >= risk_medium:
+        return RiskBand.MEDIUM
+    return RiskBand.LOW
+
+
+def _evaluate_spend_approval(
+    vendor_transaction: VendorTransaction,
     rule: RuleMetadata,
     evaluated_at: str,
 ) -> DecisionRecord:
-    """Evaluate harassment/bullying incidents based on severity and evidence."""
-    evidence_references = _build_base_evidence_references(incident_case)
+    """Evaluate purchase-order spend against single/dual approval thresholds."""
+    evidence_references = _build_base_evidence_references(vendor_transaction)
 
-    # Extract escalation triggers from rule
     escalation_triggers = rule.escalation_triggers or {}
-    severity_medium = escalation_triggers.get("severity_score_medium", 4)
-    severity_high = escalation_triggers.get("severity_score_high", 7)
-    severity_critical = escalation_triggers.get("severity_score_critical", 9)
+    single_approval_amount = escalation_triggers.get("single_approval_amount", 1000)
+    dual_approval_amount = escalation_triggers.get("dual_approval_amount", 10000)
+    risk_medium = escalation_triggers.get("risk_score_medium", 4)
+    risk_high = escalation_triggers.get("risk_score_high", 6)
+    risk_critical = escalation_triggers.get("risk_score_critical", 8)
 
-    # Calculate severity based on incident description length and protected characteristics
-    base_severity = 3.0
-    
-    if len(incident_case.incident_description) > 500:
-        base_severity += 2.0
-    elif len(incident_case.incident_description) > 200:
-        base_severity += 1.0
+    base_risk = 2.0
 
-    if incident_case.protected_characteristic_mentioned:
-        base_severity += 2.0
+    if vendor_transaction.amount >= dual_approval_amount:
+        base_risk += 4.0
+    elif vendor_transaction.amount >= single_approval_amount:
+        base_risk += 2.0
 
-    if incident_case.prior_complaints_12m >= 2:
-        base_severity += 2.0
+    if vendor_transaction.vendor_risk_level == MarketRiskLevel.HIGH:
+        base_risk += 2.0
 
-    if incident_case.involved_parties_count > 2:
-        base_severity += 1.0
+    if vendor_transaction.prior_flagged_transactions_12m >= 1:
+        base_risk += 1.5
 
-    # Cap severity at 10
-    base_severity = min(base_severity, 10.0)
-    severity_score = base_severity / 10.0  # Normalize to 0-1
-    
-    # Missing incident report is a critical gap
-    if incident_case.incident_report is None:
+    base_risk = min(base_risk, 10.0)
+    risk_score = base_risk / 10.0
+    risk_band = _risk_band_for_score(base_risk, risk_medium, risk_high, risk_critical)
+
+    requires_approval = vendor_transaction.amount >= single_approval_amount
+    requires_dual_approval = vendor_transaction.amount >= dual_approval_amount
+
+    if requires_approval and vendor_transaction.approval_record is None:
         return DecisionRecord(
-            case_id=incident_case.case_id,
-            incident_id=incident_case.incident_id,
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
             decision=DecisionState.INSUFFICIENT_EVIDENCE,
             evaluated_at=evaluated_at,
-            reasoning_summary="Incident reported but no formal incident report document was attached.",
-            severity_score=0.7,
-            confidence_score=0.85,
-            recommended_action="Request formal incident report document and route to investigator.",
+            reasoning_summary=(
+                f"Transaction amount {vendor_transaction.amount} meets the approval threshold "
+                f"({single_approval_amount}) but no approval record was attached."
+            ),
+            severity_score=0.6,
+            confidence_score=0.9,
+            recommended_action="Request approval record from a compliance-authorized approver before spend proceeds.",
             evidence_references=evidence_references,
             risk_band=RiskBand.HIGH,
-            risk_score=0.7,
-            triggered_signal_ids=["SIG-MISSING-INCIDENT-REPORT"],
-            signal_rationale=["Incident report documentation is required for investigation."],
-            escalation_decision="investigation_required",
-            escalation_policy_version=CONDUCT_ESCALATION_VERSION,
+            risk_score=0.6,
+            triggered_signal_ids=["SIG-MISSING-APPROVAL"],
+            signal_rationale=["Spend at or above the approval threshold requires an on-file approval record."],
+            escalation_decision="queue_for_approval",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
             review_required=True,
             review_status=ReviewStatus.PENDING,
             rule_metadata=rule,
         )
 
-    # Determine risk band and escalation based on severity
-    if base_severity >= severity_critical:
-        risk_band = RiskBand.CRITICAL
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "IMMEDIATE escalation to HR, Legal, and senior management. Urgent investigation required."
-        escalation = "investigation_required"
-    elif base_severity >= severity_high:
-        risk_band = RiskBand.HIGH
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "Route to investigation team immediately."
-        escalation = "investigation_required"
-    elif base_severity >= severity_medium:
-        risk_band = RiskBand.MEDIUM
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "Route to investigation team for standard investigation."
-        escalation = "investigation_required"
+    if vendor_transaction.approval_record is not None and vendor_transaction.approval_record.approved is False:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.BLOCKED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Approval record on file explicitly denies this spend.",
+            severity_score=0.9,
+            confidence_score=0.95,
+            recommended_action="Block the transaction. Escalate to compliance manager for final disposition.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.CRITICAL,
+            risk_score=0.9,
+            triggered_signal_ids=["SIG-APPROVAL-DENIED"],
+            signal_rationale=["The recorded approver denied this spend."],
+            escalation_decision="mandatory_review",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if requires_dual_approval and vendor_transaction.second_approval_record is None:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.HUMAN_REVIEW_REQUIRED,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                f"Transaction amount {vendor_transaction.amount} meets the dual-approval threshold "
+                f"({dual_approval_amount}) but only one approval record is on file."
+            ),
+            severity_score=risk_score,
+            confidence_score=0.9,
+            recommended_action="Route to a second independent approver before spend proceeds.",
+            evidence_references=evidence_references,
+            risk_band=risk_band,
+            risk_score=risk_score,
+            triggered_signal_ids=["SIG-SECOND-APPROVAL-NEEDED"],
+            signal_rationale=["High-value spend requires a second, independent approval."],
+            escalation_decision="queue_for_second_approval",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if (
+        requires_dual_approval
+        and vendor_transaction.second_approval_record is not None
+        and vendor_transaction.second_approval_record.approved is False
+    ):
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.BLOCKED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Second approval record on file explicitly denies this spend.",
+            severity_score=0.9,
+            confidence_score=0.95,
+            recommended_action="Block the transaction. Escalate to compliance manager for final disposition.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.CRITICAL,
+            risk_score=0.9,
+            triggered_signal_ids=["SIG-APPROVAL-DENIED"],
+            signal_rationale=["The second approver denied this spend."],
+            escalation_decision="mandatory_review",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    review_required = risk_band != RiskBand.LOW
+    if risk_band == RiskBand.CRITICAL:
+        action = "CRITICAL risk despite approval. Immediate compliance manager review required."
+    elif risk_band == RiskBand.HIGH:
+        action = "Route to compliance analyst for review before spend is released."
+    elif risk_band == RiskBand.MEDIUM:
+        action = "Log for standard compliance review."
     else:
-        risk_band = RiskBand.LOW
-        decision = DecisionState.CLEARED
-        action = "Log incident and monitor for pattern. No immediate action required."
-        escalation = "monitor_only"
+        action = "Approve and log. No further action required."
 
     return DecisionRecord(
-        case_id=incident_case.case_id,
-        incident_id=incident_case.incident_id,
-        decision=decision,
+        case_id=vendor_transaction.case_id,
+        transaction_id=vendor_transaction.transaction_id,
+        decision=DecisionState.APPROVED,
         evaluated_at=evaluated_at,
-        reasoning_summary=f"Harassment/bullying incident evaluated with severity score {base_severity:.1f}/10.",
-        severity_score=severity_score,
+        reasoning_summary=f"Spend approval evaluated with risk score {base_risk:.1f}/10.",
+        severity_score=risk_score,
         confidence_score=0.88,
         recommended_action=action,
         evidence_references=evidence_references,
         risk_band=risk_band,
-        risk_score=severity_score,
+        risk_score=risk_score,
         triggered_signal_ids=[],
         signal_rationale=[],
-        escalation_decision=escalation,
-        escalation_policy_version=CONDUCT_ESCALATION_VERSION,
-        review_required=(decision != DecisionState.CLEARED),
-        review_status=ReviewStatus.PENDING if decision != DecisionState.CLEARED else ReviewStatus.NOT_REQUIRED,
+        escalation_decision="auto_close" if not review_required else "queue_for_review",
+        escalation_policy_version=VENDOR_ESCALATION_VERSION,
+        review_required=review_required,
+        review_status=ReviewStatus.PENDING if review_required else ReviewStatus.NOT_REQUIRED,
         rule_metadata=rule,
     )
 
 
-def _evaluate_discrimination_incident(
-    incident_case: IncidentCase,
+def _evaluate_vendor_due_diligence(
+    vendor_transaction: VendorTransaction,
     rule: RuleMetadata,
     evaluated_at: str,
 ) -> DecisionRecord:
-    """Evaluate discrimination incidents with heightened scrutiny."""
-    evidence_references = _build_base_evidence_references(incident_case)
+    """Evaluate whether a vendor has the required due-diligence screening on file."""
+    evidence_references = _build_base_evidence_references(vendor_transaction)
 
     escalation_triggers = rule.escalation_triggers or {}
-    severity_medium = escalation_triggers.get("severity_score_medium", 4)
-    severity_high = escalation_triggers.get("severity_score_high", 6)
-    severity_critical = escalation_triggers.get("severity_score_critical", 8)
+    screening_required_above_amount = escalation_triggers.get("screening_required_above_amount", 5000)
+    new_vendor_requires_screening = escalation_triggers.get("new_vendor_requires_screening", True)
+    high_risk_vendor_requires_screening = escalation_triggers.get("high_risk_vendor_requires_screening", True)
+    risk_medium = escalation_triggers.get("risk_score_medium", 4)
+    risk_high = escalation_triggers.get("risk_score_high", 6)
+    risk_critical = escalation_triggers.get("risk_score_critical", 8)
 
-    # Discrimination allegations are treated seriously
-    base_severity = 5.0  # Higher baseline
-    
-    if incident_case.protected_characteristic_mentioned:
-        base_severity = max(base_severity, 7.0)
-        evidence_references.append("protected_characteristic:mentioned")
+    base_risk = 2.0
 
-    if len(incident_case.incident_description) > 300:
-        base_severity += 1.5
+    if vendor_transaction.vendor_risk_level == MarketRiskLevel.HIGH:
+        base_risk += 3.0
+    elif vendor_transaction.vendor_risk_level == MarketRiskLevel.MEDIUM:
+        base_risk += 1.0
 
-    if incident_case.involved_parties_count > 1:
-        base_severity += 1.0
+    if vendor_transaction.new_vendor:
+        base_risk += 1.5
 
-    base_severity = min(base_severity, 10.0)
-    severity_score = base_severity / 10.0
+    if vendor_transaction.amount >= screening_required_above_amount:
+        base_risk += 1.5
 
-    # Discrimination claims require escalation to Legal
-    if base_severity >= severity_critical:
-        risk_band = RiskBand.CRITICAL
-        decision = DecisionState.POLICY_VIOLATION_CONFIRMED
-        action = "IMMEDIATE escalation to HR, Legal, and C-suite. Formal investigation + legal review required."
-        escalation = "investigation_required"
-    elif base_severity >= severity_high:
-        risk_band = RiskBand.HIGH
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "Escalate to Legal and HR immediately for investigation."
-        escalation = "investigation_required"
-    else:
-        risk_band = RiskBand.MEDIUM
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "Route to HR for investigation."
-        escalation = "investigation_required"
+    if vendor_transaction.prior_flagged_transactions_12m >= 1:
+        base_risk += 1.0
 
-    return DecisionRecord(
-        case_id=incident_case.case_id,
-        incident_id=incident_case.incident_id,
-        decision=decision,
-        evaluated_at=evaluated_at,
-        reasoning_summary=f"Discrimination incident evaluated with severity score {base_severity:.1f}/10. Protected characteristics: {incident_case.protected_characteristic_mentioned}",
-        severity_score=severity_score,
-        confidence_score=0.92,
-        recommended_action=action,
-        evidence_references=evidence_references,
-        risk_band=risk_band,
-        risk_score=severity_score,
-        triggered_signal_ids=["SIG-DISCRIMINATION"] if incident_case.protected_characteristic_mentioned else [],
-        signal_rationale=["Potential discrimination based on protected characteristic."] if incident_case.protected_characteristic_mentioned else [],
-        escalation_decision=escalation,
-        escalation_policy_version=CONDUCT_ESCALATION_VERSION,
-        review_required=True,
-        review_status=ReviewStatus.PENDING,
-        rule_metadata=rule,
+    base_risk = min(base_risk, 10.0)
+    risk_score = base_risk / 10.0
+    risk_band = _risk_band_for_score(base_risk, risk_medium, risk_high, risk_critical)
+
+    screening_required = (
+        (vendor_transaction.new_vendor and new_vendor_requires_screening)
+        or (vendor_transaction.vendor_risk_level == MarketRiskLevel.HIGH and high_risk_vendor_requires_screening)
+        or vendor_transaction.amount >= screening_required_above_amount
     )
 
+    screening = vendor_transaction.vendor_screening_record
 
-def _evaluate_client_treatment_incident(
-    incident_case: IncidentCase,
-    rule: RuleMetadata,
-    evaluated_at: str,
-) -> DecisionRecord:
-    """Evaluate client treatment and conflict of interest incidents."""
-    evidence_references = _build_base_evidence_references(incident_case)
+    if screening_required and (screening is None or not screening.completed):
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.INSUFFICIENT_EVIDENCE,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Vendor due-diligence screening is required but not on file or not completed.",
+            severity_score=0.65,
+            confidence_score=0.9,
+            recommended_action="Request completed vendor screening (sanctions/watchlist check) before spend proceeds.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.65,
+            triggered_signal_ids=["SIG-MISSING-VENDOR-SCREENING"],
+            signal_rationale=["Vendor risk profile requires completed due-diligence screening."],
+            escalation_decision="queue_for_screening",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
 
-    escalation_triggers = rule.escalation_triggers or {}
-    severity_medium = escalation_triggers.get("severity_score_medium", 4)
-    severity_high = escalation_triggers.get("severity_score_high", 6)
-    severity_critical = escalation_triggers.get("severity_score_critical", 8)
+    if screening is not None and screening.completed and screening.sanctions_check_passed is False:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.BLOCKED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Vendor failed sanctions/watchlist screening.",
+            severity_score=0.95,
+            confidence_score=0.95,
+            recommended_action="Block the transaction. Escalate to Legal and compliance manager immediately.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.CRITICAL,
+            risk_score=0.95,
+            triggered_signal_ids=["SIG-SANCTIONS-SCREENING-FAILED"],
+            signal_rationale=["Vendor did not clear sanctions/watchlist screening."],
+            escalation_decision="mandatory_review",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
 
-    base_severity = 2.0
-    
-    if len(incident_case.incident_description) > 400:
-        base_severity += 2.0
-    elif len(incident_case.incident_description) > 200:
-        base_severity += 1.0
-
-    # Client relationship incidents are important for business reputation
-    if incident_case.involved_party_role == InvolvedPartyRole.CLIENT:
-        base_severity += 2.5
-
-    if incident_case.prior_complaints_12m >= 1:
-        base_severity += 1.5
-
-    base_severity = min(base_severity, 10.0)
-    severity_score = base_severity / 10.0
-
-    if base_severity >= severity_critical:
-        risk_band = RiskBand.CRITICAL
-        decision = DecisionState.POLICY_VIOLATION_CONFIRMED
-        action = "CRITICAL escalation - potential client relationship damage. Business leadership + Legal review required."
-        escalation = "investigation_required"
-    elif base_severity >= severity_high:
-        risk_band = RiskBand.HIGH
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "Route to business relationship manager and compliance team for investigation."
-        escalation = "investigation_required"
-    elif base_severity >= severity_medium:
-        risk_band = RiskBand.MEDIUM
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "Route to compliance analyst for investigation."
-        escalation = "investigation_required"
+    review_required = risk_band != RiskBand.LOW
+    if risk_band == RiskBand.CRITICAL:
+        action = "CRITICAL vendor risk. Immediate compliance manager review required despite passed screening."
+    elif risk_band == RiskBand.HIGH:
+        action = "Route to compliance analyst for review before spend is released."
+    elif risk_band == RiskBand.MEDIUM:
+        action = "Log for standard compliance review."
     else:
-        risk_band = RiskBand.LOW
-        decision = DecisionState.CLEARED
-        action = "Log as low-severity client interaction issue. Monitor for patterns."
-        escalation = "monitor_only"
+        action = "Approve and log. No further action required."
 
     return DecisionRecord(
-        case_id=incident_case.case_id,
-        incident_id=incident_case.incident_id,
-        decision=decision,
+        case_id=vendor_transaction.case_id,
+        transaction_id=vendor_transaction.transaction_id,
+        decision=DecisionState.APPROVED,
         evaluated_at=evaluated_at,
-        reasoning_summary=f"Client treatment incident evaluated with severity score {base_severity:.1f}/10.",
-        severity_score=severity_score,
-        confidence_score=0.86,
+        reasoning_summary=f"Vendor due-diligence evaluated with risk score {base_risk:.1f}/10.",
+        severity_score=risk_score,
+        confidence_score=0.88,
         recommended_action=action,
         evidence_references=evidence_references,
         risk_band=risk_band,
-        risk_score=severity_score,
+        risk_score=risk_score,
         triggered_signal_ids=[],
         signal_rationale=[],
-        escalation_decision=escalation,
-        escalation_policy_version=CONDUCT_ESCALATION_VERSION,
-        review_required=(decision != DecisionState.CLEARED),
-        review_status=ReviewStatus.PENDING if decision != DecisionState.CLEARED else ReviewStatus.NOT_REQUIRED,
+        escalation_decision="auto_close" if not review_required else "queue_for_review",
+        escalation_policy_version=VENDOR_ESCALATION_VERSION,
+        review_required=review_required,
+        review_status=ReviewStatus.PENDING if review_required else ReviewStatus.NOT_REQUIRED,
         rule_metadata=rule,
     )
 
 
-def _evaluate_international_governance_incident(
-    incident_case: IncidentCase,
-    rule: RuleMetadata,
-    evaluated_at: str,
-) -> DecisionRecord:
-    """Evaluate incidents involving international employment law and regulatory compliance."""
-    evidence_references = _build_base_evidence_references(incident_case)
-    
-    if incident_case.country_code:
-        evidence_references.append(f"jurisdiction:{incident_case.country_code}")
-
-    escalation_triggers = rule.escalation_triggers or {}
-    severity_medium = escalation_triggers.get("severity_score_medium", 4)
-    severity_high = escalation_triggers.get("severity_score_high", 6)
-    severity_critical = escalation_triggers.get("severity_score_critical", 8)
-
-    base_severity = 3.0
-    
-    if incident_case.protected_characteristic_mentioned:
-        base_severity += 3.0
-        evidence_references.append("international:protected_char")
-
-    if len(incident_case.incident_description) > 300:
-        base_severity += 1.5
-
-    # International governance issues often require legal expertise
-    if incident_case.jurisdiction_risk_level and incident_case.jurisdiction_risk_level.value == "high":
-        base_severity += 2.0
-        evidence_references.append("international:high_risk_jurisdiction")
-
-    base_severity = min(base_severity, 10.0)
-    severity_score = base_severity / 10.0
-
-    if base_severity >= severity_critical:
-        risk_band = RiskBand.CRITICAL
-        decision = DecisionState.POLICY_VIOLATION_CONFIRMED
-        action = "URGENT escalation to Legal and International Compliance. Potential regulatory authority notification required."
-        escalation = "investigation_required"
-    elif base_severity >= severity_high:
-        risk_band = RiskBand.HIGH
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "Escalate to International Compliance and Local Legal Counsel immediately."
-        escalation = "investigation_required"
-    elif base_severity >= severity_medium:
-        risk_band = RiskBand.MEDIUM
-        decision = DecisionState.INVESTIGATION_REQUIRED
-        action = "Route to International Compliance team for jurisdiction-specific investigation."
-        escalation = "investigation_required"
-    else:
-        risk_band = RiskBand.LOW
-        decision = DecisionState.CLEARED
-        action = "Log incident and monitor for international regulatory updates."
-        escalation = "monitor_only"
-
-    return DecisionRecord(
-        case_id=incident_case.case_id,
-        incident_id=incident_case.incident_id,
-        decision=decision,
-        evaluated_at=evaluated_at,
-        reasoning_summary=f"International governance incident (jurisdiction: {incident_case.country_code}) evaluated with severity score {base_severity:.1f}/10.",
-        severity_score=severity_score,
-        confidence_score=0.84,
-        recommended_action=action,
-        evidence_references=evidence_references,
-        risk_band=risk_band,
-        risk_score=severity_score,
-        triggered_signal_ids=[],
-        signal_rationale=[],
-        escalation_decision=escalation,
-        escalation_policy_version=CONDUCT_ESCALATION_VERSION,
-        review_required=True,
-        review_status=ReviewStatus.PENDING,
-        rule_metadata=rule,
-    )
-
-
-def evaluate_incident_case(incident_case: IncidentCase) -> DecisionRecord:
-    """Evaluate a conduct incident case against the applicable rule."""
-    rule = load_rule(incident_case.control_id)
+def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecord:
+    """Evaluate a vendor transaction case against the applicable procurement rule."""
+    rule = load_rule(vendor_transaction.control_id)
     evaluated_at = datetime.now(UTC).isoformat()
 
-    if rule.control_domain == "employee_conduct":
-        # Route to appropriate evaluator based on control ID
-        if "HARASSMENT" in rule.control_id:
-            return _evaluate_harassment_bullying_incident(incident_case, rule, evaluated_at)
-        elif "DISCRIMINATION" in rule.control_id:
-            return _evaluate_discrimination_incident(incident_case, rule, evaluated_at)
-        elif "CLIENT" in rule.control_id:
-            return _evaluate_client_treatment_incident(incident_case, rule, evaluated_at)
-        elif "INTL" in rule.control_id:
-            return _evaluate_international_governance_incident(incident_case, rule, evaluated_at)
+    if rule.control_domain == "procurement":
+        if "DUEDILIGENCE" in rule.control_id:
+            return _evaluate_vendor_due_diligence(vendor_transaction, rule, evaluated_at)
+        elif "SPEND-APPROVAL" in rule.control_id:
+            return _evaluate_spend_approval(vendor_transaction, rule, evaluated_at)
         else:
-            # Default handler for unknown conduct controls
-            return _evaluate_harassment_bullying_incident(incident_case, rule, evaluated_at)
+            # Default handler for unknown procurement controls
+            return _evaluate_spend_approval(vendor_transaction, rule, evaluated_at)
 
     raise ValueError(f"Unsupported control_domain: {rule.control_domain}")
 
 
 def calculate_review_queue_metrics(decisions: list[DecisionRecord], sla_target_hours: float = DEFAULT_SLA_HOURS) -> ReviewQueueMetrics:
-    """Calculate metrics for the active investigation queue."""
+    """Calculate metrics for the active review queue."""
     active_decisions = [decision for decision in decisions if decision.review_required]
     zero_band_counts = {band: 0 for band in RiskBand}
 

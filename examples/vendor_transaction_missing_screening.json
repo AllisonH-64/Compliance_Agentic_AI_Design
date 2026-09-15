@@ -1,0 +1,20 @@
+{
+  "case_id": "CASE-2003",
+  "transaction_id": "PO-5003",
+  "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+  "vendor_name": "Novaline Freight Partners",
+  "vendor_id": "VEND-3011",
+  "new_vendor": true,
+  "vendor_risk_level": "medium",
+  "requestor_role": "logistics_lead",
+  "amount": 1800,
+  "currency": "USD",
+  "country_code": "US",
+  "business_justification": "First shipment contract with a new freight vendor.",
+  "approval_record": {
+    "approver_role": "compliance_manager",
+    "approved": true
+  },
+  "vendor_screening_record": null,
+  "prior_flagged_transactions_12m": 0
+}

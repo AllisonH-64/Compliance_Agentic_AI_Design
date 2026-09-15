@@ -3,14 +3,14 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-DEFAULT_CONTROL_ID = "CONDUCT-HARASSMENT-001"
+DEFAULT_CONTROL_ID = "PROC-SPEND-APPROVAL-001"
 
 
 class DecisionState(str, Enum):
-    POLICY_VIOLATION_CONFIRMED = "policy_violation_confirmed"
-    CLEARED = "cleared"
+    APPROVED = "approved"
+    BLOCKED = "blocked"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
-    INVESTIGATION_REQUIRED = "investigation_required"
+    HUMAN_REVIEW_REQUIRED = "human_review_required"
 
 
 class ReviewerOutcome(str, Enum):
@@ -35,29 +35,10 @@ class UserRole(str, Enum):
     AUDITOR = "auditor"
 
 
-class InvolvedPartyRole(str, Enum):
-    RESPONDENT = "respondent"
-    COMPLAINANT = "complainant"
-    WITNESS = "witness"
-    MANAGER = "manager"
-    CLIENT = "client"
-    VENDOR = "vendor"
-    UNKNOWN = "unknown"
-
-
 class MarketRiskLevel(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
-
-
-class IncidentCategory(str, Enum):
-    HARASSMENT_BULLYING = "harassment_bullying"
-    DISCRIMINATION = "discrimination"
-    CLIENT_TREATMENT = "client_treatment"
-    CONFLICT_OF_INTEREST = "conflict_of_interest"
-    INTERNATIONAL_GOVERNANCE = "international_governance"
-    OTHER = "other"
 
 
 class RiskBand(str, Enum):
@@ -75,77 +56,64 @@ class ReopenReason(str, Enum):
     OTHER = "other"
 
 
-class IncidentReport(BaseModel):
-    attached: bool = Field(..., description="Whether an incident report was filed")
-    document_id: str | None = Field(default=None, description="Identifier for the incident report document")
+class ApprovalRecord(BaseModel):
+    approver_role: str = Field(..., description="Role of the person who approved or denied the spend")
+    approved: bool = Field(..., description="Whether the approver signed off on the transaction")
+    document_id: str | None = Field(default=None, description="Identifier for the approval record document")
 
 
-class EvidenceRecord(BaseModel):
-    attached: bool = Field(..., description="Whether supporting evidence (witness statements, communications, etc.) was attached")
-    document_id: str | None = Field(default=None, description="Identifier for the evidence document")
+class VendorScreeningRecord(BaseModel):
+    completed: bool = Field(..., description="Whether vendor due-diligence screening has been completed")
+    sanctions_check_passed: bool | None = Field(
+        default=None,
+        description="Result of sanctions/watchlist screening, if completed",
+    )
+    document_id: str | None = Field(default=None, description="Identifier for the screening record document")
 
 
-class IncidentCase(BaseModel):
+class VendorTransaction(BaseModel):
     case_id: str = Field(..., description="Unique identifier for the compliance case")
-    incident_id: str = Field(..., description="Unique identifier for the incident report")
+    transaction_id: str = Field(..., description="Unique identifier for the purchase order or transaction")
     control_id: str = Field(
         default=DEFAULT_CONTROL_ID,
         description="Identifier for the rule control to evaluate against",
     )
-    respondent_name: str = Field(..., description="Name or identifier of the respondent (subject of the incident)")
-    complainant_name: str | None = Field(
-        default=None,
-        description="Name or identifier of the complainant (person filing the incident)"
+    vendor_name: str = Field(..., description="Name of the vendor receiving the spend")
+    vendor_id: str | None = Field(default=None, description="Identifier for the vendor in the vendor master")
+    new_vendor: bool = Field(
+        default=False,
+        description="Whether this is the vendor's first transaction with the organization",
     )
-    submitter_role: str = Field(..., description="Role of the person submitting the incident")
-    incident_report: IncidentReport | None = Field(
+    vendor_risk_level: MarketRiskLevel | None = Field(
         default=None,
-        description="Incident report evidence attached to the case",
+        description="Compliance-managed risk tier for the vendor",
     )
-    evidence_record: EvidenceRecord | None = Field(
-        default=None,
-        description="Supporting evidence (witness statements, communications) attached when required by the selected control",
-    )
-    involved_party_role: InvolvedPartyRole | None = Field(
-        default=None,
-        description="Classification of the respondent for risk scoring",
-    )
+    requestor_role: str = Field(..., description="Role of the person requesting the spend")
+    amount: float = Field(..., ge=0, description="Transaction amount")
+    currency: str = Field(..., description="ISO currency code for the transaction amount")
     country_code: str | None = Field(
         default=None,
         min_length=2,
         max_length=2,
-        description="ISO country code where the incident occurred",
+        description="ISO country code where the vendor is based",
     )
-    jurisdiction_risk_level: MarketRiskLevel | None = Field(
+    business_justification: str = Field(..., description="Business justification for the transaction")
+    approval_record: ApprovalRecord | None = Field(
         default=None,
-        description="Compliance-managed jurisdiction risk tier",
+        description="Primary approval evidence attached to the transaction",
     )
-    incident_description: str = Field(..., description="Detailed description of the incident")
-    incident_date: str | None = Field(
+    second_approval_record: ApprovalRecord | None = Field(
         default=None,
-        description="Date when the incident occurred (ISO 8601 format)"
+        description="Secondary approval evidence required above the dual-approval threshold",
     )
-    prior_complaints_12m: int = Field(
+    vendor_screening_record: VendorScreeningRecord | None = Field(
+        default=None,
+        description="Vendor due-diligence screening evidence attached when required by the selected control",
+    )
+    prior_flagged_transactions_12m: int = Field(
         default=0,
         ge=0,
-        description="Count of prior complaints involving the same respondent in the last 12 months",
-    )
-    escalation_reference: str | None = Field(
-        default=None,
-        description="Optional escalation or prior investigation identifier",
-    )
-    incident_category: IncidentCategory | None = Field(
-        default=None,
-        description="Category of the incident for routing and rule evaluation",
-    )
-    involved_parties_count: int = Field(
-        default=1,
-        ge=1,
-        description="Number of individuals directly involved in the incident",
-    )
-    protected_characteristic_mentioned: bool = Field(
-        default=False,
-        description="Whether the incident involves protected characteristics (age, gender, race, disability, etc.)"
+        description="Count of prior flagged transactions involving the same vendor in the last 12 months",
     )
 
 
@@ -157,14 +125,14 @@ class RuleMetadata(BaseModel):
     description: str
     severity_threshold: float | None = Field(default=None, description="Minimum severity score to trigger action")
     required_evidence: list[str]
-    required_investigator_role: str | None = None
+    required_reviewer_role: str | None = None
     international_applicability: list[str] = Field(default_factory=lambda: ["ALL"])
     escalation_triggers: dict | None = Field(default=None, description="Conditions that trigger escalation")
 
 
 class DecisionRecord(BaseModel):
     case_id: str
-    incident_id: str
+    transaction_id: str
     decision: DecisionState
     evaluated_at: str
     reasoning_summary: str
@@ -176,8 +144,8 @@ class DecisionRecord(BaseModel):
     risk_score: float = Field(default=0.0, ge=0, le=1)
     triggered_signal_ids: list[str] = Field(default_factory=list)
     signal_rationale: list[str] = Field(default_factory=list)
-    escalation_decision: str = "investigation_required"
-    escalation_policy_version: str = "conduct-escalation-v1"
+    escalation_decision: str = "auto_close"
+    escalation_policy_version: str = "vendor-due-diligence-v1"
     review_cycle_id: int = Field(default=1, ge=1)
     reopen_reason: ReopenReason | None = None
     review_required: bool
@@ -241,14 +209,14 @@ class ReviewQueueMetrics(BaseModel):
 class ComplianceSummaryReport(BaseModel):
     generated_at: str
     total_decisions: int
-    policy_violation_confirmed_count: int
-    cleared_count: int
+    approved_count: int
+    blocked_count: int
     insufficient_evidence_count: int
-    investigation_required_count: int
-    active_investigation_count: int
-    completed_investigation_count: int
+    human_review_required_count: int
+    active_review_count: int
+    completed_review_count: int
     override_count: int
     reopened_case_count: int
     decision_count_by_risk_band: dict[RiskBand, int]
-    active_investigation_count_by_risk_band: dict[RiskBand, int]
+    active_review_count_by_risk_band: dict[RiskBand, int]
     reopen_reason_counts: dict[ReopenReason, int]

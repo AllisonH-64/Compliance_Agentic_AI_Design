@@ -46,7 +46,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS decisions (
                 case_id TEXT PRIMARY KEY,
-                incident_id TEXT NOT NULL,
+                transaction_id TEXT NOT NULL,
                 decision_json TEXT NOT NULL
             )
             """
@@ -102,15 +102,15 @@ def save_decision(
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO decisions (case_id, incident_id, decision_json)
+            INSERT INTO decisions (case_id, transaction_id, decision_json)
             VALUES (?, ?, ?)
             ON CONFLICT(case_id) DO UPDATE SET
-                incident_id = excluded.incident_id,
+                transaction_id = excluded.transaction_id,
                 decision_json = excluded.decision_json
             """,
             (
                 decision_record.case_id,
-                decision_record.incident_id,
+                decision_record.transaction_id,
                 serialized_record,
             ),
         )
@@ -166,7 +166,7 @@ def _deserialize_decision(payload: str) -> DecisionRecord:
     raw_record.setdefault("triggered_signal_ids", [])
     raw_record.setdefault("signal_rationale", [])
     raw_record.setdefault("escalation_decision", "auto_close")
-    raw_record.setdefault("escalation_policy_version", "risk-signals-v1")
+    raw_record.setdefault("escalation_policy_version", "vendor-due-diligence-v1")
     raw_record.setdefault("review_cycle_id", 1)
     raw_record.setdefault("reopen_reason", None)
 

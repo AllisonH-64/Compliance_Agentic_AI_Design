@@ -43,16 +43,20 @@ def _configure_auth_secret(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _seed_review_case(client: TestClient, case_id: str = "case-review-1") -> None:
+    # Amount above the single-approval threshold with no approval record attached
+    # is guaranteed to come back insufficient_evidence / review_required=True.
     response = client.post(
         "/evaluate",
         headers=_auth_headers("employee-1", "employee"),
         json={
             "case_id": case_id,
-            "transaction_id": f"txn-{case_id}",
-            "control_id": "ETH-GIFT-001",
-            "amount": 200,
+            "transaction_id": f"po-{case_id}",
+            "control_id": "PROC-SPEND-APPROVAL-001",
+            "vendor_name": "Test Vendor Co",
+            "requestor_role": "employee",
+            "amount": 2500,
             "currency": "USD",
-            "requestor_role": "sales_manager",
+            "business_justification": "Recurring services contract.",
         },
     )
     assert response.status_code == 200
@@ -66,10 +70,12 @@ def test_evaluate_requires_auth_token(tmp_path: Path) -> None:
         "/evaluate",
         json={
             "case_id": "case-auth-1",
-            "transaction_id": "txn-auth-1",
+            "transaction_id": "po-auth-1",
+            "vendor_name": "Test Vendor Co",
+            "requestor_role": "employee",
             "amount": 40,
             "currency": "USD",
-            "requestor_role": "employee",
+            "business_justification": "Small office supply purchase.",
         },
     )
 
@@ -98,10 +104,12 @@ def test_rejects_token_with_invalid_issuer(tmp_path: Path) -> None:
         headers={"Authorization": f"Bearer {bad_token}"},
         json={
             "case_id": "case-auth-invalid-issuer-1",
-            "transaction_id": "txn-auth-invalid-issuer-1",
+            "transaction_id": "po-auth-invalid-issuer-1",
+            "vendor_name": "Test Vendor Co",
+            "requestor_role": "employee",
             "amount": 40,
             "currency": "USD",
-            "requestor_role": "employee",
+            "business_justification": "Small office supply purchase.",
         },
     )
 
@@ -148,8 +156,8 @@ def test_review_lifecycle_preserves_decision_and_review_history(tmp_path: Path) 
         json={
             "reviewer_id": "analyst-1",
             "outcome": "overridden",
-            "final_decision": "compliant",
-            "notes": "Manager-approved exception recorded.",
+            "final_decision": "approved",
+            "notes": "Approval obtained out-of-band and confirmed with the vendor.",
         },
     )
     assert submit_response.status_code == 200
@@ -189,8 +197,8 @@ def test_reports_summary_counts_completed_reviews_and_overrides(tmp_path: Path) 
         json={
             "reviewer_id": "analyst-1",
             "outcome": "overridden",
-            "final_decision": "compliant",
-            "notes": "Override accepted after review.",
+            "final_decision": "approved",
+            "notes": "Override accepted after manual review.",
         },
     )
 
@@ -210,20 +218,22 @@ def test_reports_summary_counts_completed_reviews_and_overrides(tmp_path: Path) 
     assert payload["reopened_case_count"] == 0
 
 
-def test_evaluate_receipt_control_requires_receipt_evidence(tmp_path: Path) -> None:
-    set_db_path(tmp_path / "receipt.db")
+def test_evaluate_missing_approval_requires_evidence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "missing-approval.db")
     client = TestClient(app)
 
     response = client.post(
         "/evaluate",
         headers=_auth_headers("employee-1", "employee"),
         json={
-            "case_id": "case-receipt-1",
-            "transaction_id": "txn-receipt-1",
-            "control_id": "ETH-GIFT-002",
-            "amount": 120,
+            "case_id": "case-missing-approval-1",
+            "transaction_id": "po-missing-approval-1",
+            "control_id": "PROC-SPEND-APPROVAL-001",
+            "vendor_name": "Meridian Consulting Group",
+            "requestor_role": "sales_manager",
+            "amount": 2500,
             "currency": "USD",
-            "requestor_role": "employee",
+            "business_justification": "Market research engagement.",
         },
     )
 
@@ -232,7 +242,235 @@ def test_evaluate_receipt_control_requires_receipt_evidence(tmp_path: Path) -> N
     assert payload["decision"] == "insufficient_evidence"
     assert payload["review_required"] is True
     assert payload["review_status"] == "pending"
-    assert payload["rule_metadata"]["control_id"] == "ETH-GIFT-002"
+    assert payload["rule_metadata"]["control_id"] == "PROC-SPEND-APPROVAL-001"
+
+
+def test_evaluate_missing_screening_requires_evidence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "missing-screening.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-missing-screening-1",
+            "transaction_id": "po-missing-screening-1",
+            "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+            "vendor_name": "Novaline Freight Partners",
+            "new_vendor": True,
+            "requestor_role": "logistics_lead",
+            "amount": 1800,
+            "currency": "USD",
+            "business_justification": "First shipment contract with a new freight vendor.",
+            "approval_record": {"approver_role": "compliance_manager", "approved": True},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["review_required"] is True
+    assert "SIG-MISSING-VENDOR-SCREENING" in payload["triggered_signal_ids"]
+
+
+def test_denied_approval_blocks_transaction(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "denied-approval.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-denied-approval-1",
+            "transaction_id": "po-denied-approval-1",
+            "control_id": "PROC-SPEND-APPROVAL-001",
+            "vendor_name": "Meridian Consulting Group",
+            "requestor_role": "sales_manager",
+            "amount": 2500,
+            "currency": "USD",
+            "business_justification": "Market research engagement.",
+            "approval_record": {"approver_role": "compliance_manager", "approved": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "blocked"
+    assert payload["risk_band"] == "critical"
+    assert payload["review_required"] is True
+
+
+def test_vendor_screening_failure_blocks_transaction(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "failed-screening.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-failed-screening-1",
+            "transaction_id": "po-failed-screening-1",
+            "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+            "vendor_name": "Starline Trading Co",
+            "new_vendor": True,
+            "vendor_risk_level": "high",
+            "requestor_role": "procurement_lead",
+            "amount": 12000,
+            "currency": "USD",
+            "business_justification": "Bulk hardware procurement from an overseas supplier.",
+            "vendor_screening_record": {"completed": True, "sanctions_check_passed": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "blocked"
+    assert payload["risk_band"] == "critical"
+    assert "SIG-SANCTIONS-SCREENING-FAILED" in payload["triggered_signal_ids"]
+
+
+def test_dual_approval_threshold_requires_second_approval(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "dual-approval.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-dual-approval-1",
+            "transaction_id": "po-dual-approval-1",
+            "control_id": "PROC-SPEND-APPROVAL-001",
+            "vendor_name": "Kestrel Manufacturing",
+            "requestor_role": "operations_manager",
+            "amount": 15000,
+            "currency": "USD",
+            "business_justification": "Custom tooling order for the new production line.",
+            "approval_record": {"approver_role": "compliance_manager", "approved": True},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "human_review_required"
+    assert payload["review_required"] is True
+    assert "SIG-SECOND-APPROVAL-NEEDED" in payload["triggered_signal_ids"]
+
+
+def test_risk_signals_keep_low_risk_compliant_case_auto_closed(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "risk-low.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-risk-low-1",
+            "transaction_id": "po-risk-low-1",
+            "control_id": "PROC-SPEND-APPROVAL-001",
+            "vendor_name": "Acme Office Supplies",
+            "vendor_risk_level": "low",
+            "requestor_role": "office_manager",
+            "amount": 450,
+            "currency": "USD",
+            "business_justification": "Quarterly office supply restock.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is False
+    assert payload["risk_band"] == "low"
+    assert payload["escalation_decision"] == "auto_close"
+
+
+def test_risk_signals_route_approved_case_to_mandatory_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "risk-high.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-risk-high-1",
+            "transaction_id": "po-risk-high-1",
+            "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+            "vendor_name": "Orion Field Services",
+            "vendor_risk_level": "high",
+            "requestor_role": "regional_manager",
+            "amount": 900,
+            "currency": "USD",
+            "business_justification": "Recurring maintenance contract renewal.",
+            "approval_record": {"approver_role": "compliance_manager", "approved": True},
+            "vendor_screening_record": {"completed": True, "sanctions_check_passed": True},
+            "prior_flagged_transactions_12m": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is True
+    assert payload["risk_band"] in ("high", "critical")
+    assert payload["escalation_decision"] == "queue_for_review"
+
+
+def test_reopen_completed_review_creates_new_cycle_and_tracks_reason(tmp_path: Path) -> None:
+    db_path = tmp_path / "reopen.db"
+    set_db_path(db_path)
+    client = TestClient(app)
+    _seed_review_case(client, case_id="case-reopen-1")
+
+    assign_response = client.post(
+        "/reviews/case-reopen-1/assign",
+        headers=_auth_headers("manager-1", "compliance_manager"),
+        json={"reviewer_id": "analyst-1"},
+    )
+    assert assign_response.status_code == 200
+
+    start_response = client.post(
+        "/reviews/case-reopen-1/start",
+        headers=_auth_headers("analyst-1", "compliance_analyst"),
+        json={"reviewer_id": "analyst-1"},
+    )
+    assert start_response.status_code == 200
+
+    submit_response = client.post(
+        "/reviews/case-reopen-1",
+        headers=_auth_headers("analyst-1", "compliance_analyst"),
+        json={
+            "reviewer_id": "analyst-1",
+            "outcome": "approved",
+            "final_decision": "approved",
+            "notes": "Initial review complete.",
+        },
+    )
+    assert submit_response.status_code == 200
+
+    reopen_response = client.post(
+        "/reviews/case-reopen-1/reopen",
+        headers=_auth_headers("manager-1", "compliance_manager"),
+        json={
+            "reason": "new_evidence",
+            "notes": "New supporting documents require reassessment.",
+        },
+    )
+
+    assert reopen_response.status_code == 200
+    payload = reopen_response.json()
+    assert payload["review_status"] == "reopened"
+    assert payload["review_required"] is True
+    assert payload["review_cycle_id"] == 2
+    assert payload["reopen_reason"] == "new_evidence"
+    assert payload["final_reviewer_outcome"] is None
+
+    with sqlite3.connect(get_db_path()) as connection:
+        decision_history_count = connection.execute(
+            "SELECT COUNT(*) FROM decision_history WHERE case_id = ?",
+            ("case-reopen-1",),
+        ).fetchone()[0]
+
+    assert decision_history_count == 5
 
 
 def test_review_metrics_counts_pending_assigned_and_in_review(tmp_path: Path) -> None:
@@ -277,8 +515,8 @@ def test_review_metrics_counts_pending_assigned_and_in_review(tmp_path: Path) ->
     assert payload["in_review_count"] == 1
     assert payload["reopened_count"] == 0
     assert payload["breached_sla_count"] == 0
-    assert payload["active_by_risk_band"]["medium"] >= 0
-    assert payload["breached_sla_by_risk_band"]["medium"] >= 0
+    assert payload["active_by_risk_band"]["high"] >= 0
+    assert payload["breached_sla_by_risk_band"]["high"] >= 0
     assert payload["average_queue_age_hours"] >= 0
     assert payload["oldest_queue_age_hours"] >= 0
 
@@ -311,125 +549,3 @@ def test_review_metrics_counts_sla_breach_for_aged_case(tmp_path: Path) -> None:
     assert payload["oldest_queue_age_hours"] >= 30
     assert sum(payload["active_by_risk_band"].values()) == payload["active_review_count"]
     assert sum(payload["breached_sla_by_risk_band"].values()) == payload["breached_sla_count"]
-
-
-def test_risk_signals_keep_low_risk_compliant_case_auto_closed(tmp_path: Path) -> None:
-    set_db_path(tmp_path / "risk-low.db")
-    client = TestClient(app)
-
-    response = client.post(
-        "/evaluate",
-        headers=_auth_headers("employee-1", "employee"),
-        json={
-            "case_id": "case-risk-low-1",
-            "transaction_id": "txn-risk-low-1",
-            "control_id": "ETH-GIFT-001",
-            "amount": 60,
-            "currency": "USD",
-            "requestor_role": "employee",
-            "recipient_type": "vendor",
-            "country_code": "US",
-            "market_risk_level": "low",
-            "business_purpose": "Client working lunch",
-            "prior_interactions_12m": 1,
-            "event_context": "relationship_management",
-        },
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["decision"] == "compliant"
-    assert payload["review_required"] is False
-    assert payload["risk_band"] == "low"
-    assert payload["escalation_decision"] == "auto_close"
-
-
-def test_risk_signals_route_compliant_case_to_mandatory_review(tmp_path: Path) -> None:
-    set_db_path(tmp_path / "risk-high.db")
-    client = TestClient(app)
-
-    response = client.post(
-        "/evaluate",
-        headers=_auth_headers("employee-1", "employee"),
-        json={
-            "case_id": "case-risk-high-1",
-            "transaction_id": "txn-risk-high-1",
-            "control_id": "ETH-GIFT-001",
-            "amount": 80,
-            "currency": "USD",
-            "requestor_role": "employee",
-            "recipient_type": "government_official",
-            "country_code": "US",
-            "market_risk_level": "high",
-            "business_purpose": "Routine courtesy gift",
-            "prior_interactions_12m": 2,
-            "event_context": "relationship_management",
-        },
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["decision"] == "human_review_required"
-    assert payload["review_required"] is True
-    assert payload["review_status"] == "pending"
-    assert payload["risk_band"] in ("high", "critical")
-    assert "SIG-GOV-OFFICIAL" in payload["triggered_signal_ids"]
-    assert payload["escalation_decision"] == "queue_for_review"
-
-
-def test_reopen_completed_review_creates_new_cycle_and_tracks_reason(tmp_path: Path) -> None:
-    db_path = tmp_path / "reopen.db"
-    set_db_path(db_path)
-    client = TestClient(app)
-    _seed_review_case(client, case_id="case-reopen-1")
-
-    assign_response = client.post(
-        "/reviews/case-reopen-1/assign",
-        headers=_auth_headers("manager-1", "compliance_manager"),
-        json={"reviewer_id": "analyst-1"},
-    )
-    assert assign_response.status_code == 200
-
-    start_response = client.post(
-        "/reviews/case-reopen-1/start",
-        headers=_auth_headers("analyst-1", "compliance_analyst"),
-        json={"reviewer_id": "analyst-1"},
-    )
-    assert start_response.status_code == 200
-
-    submit_response = client.post(
-        "/reviews/case-reopen-1",
-        headers=_auth_headers("analyst-1", "compliance_analyst"),
-        json={
-            "reviewer_id": "analyst-1",
-            "outcome": "approved",
-            "final_decision": "compliant",
-            "notes": "Initial review complete.",
-        },
-    )
-    assert submit_response.status_code == 200
-
-    reopen_response = client.post(
-        "/reviews/case-reopen-1/reopen",
-        headers=_auth_headers("manager-1", "compliance_manager"),
-        json={
-            "reason": "new_evidence",
-            "notes": "New supporting documents require reassessment.",
-        },
-    )
-
-    assert reopen_response.status_code == 200
-    payload = reopen_response.json()
-    assert payload["review_status"] == "reopened"
-    assert payload["review_required"] is True
-    assert payload["review_cycle_id"] == 2
-    assert payload["reopen_reason"] == "new_evidence"
-    assert payload["final_reviewer_outcome"] is None
-
-    with sqlite3.connect(get_db_path()) as connection:
-        decision_history_count = connection.execute(
-            "SELECT COUNT(*) FROM decision_history WHERE case_id = ?",
-            ("case-reopen-1",),
-        ).fetchone()[0]
-
-    assert decision_history_count == 5

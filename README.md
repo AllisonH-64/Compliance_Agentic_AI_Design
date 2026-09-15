@@ -1,10 +1,10 @@
-# Employee Conduct Compliance Agentic AI
+# Vendor Due-Diligence Gate
 
-This repository defines a practical framework for an Agentic AI system supporting employee conduct and workplace compliance: harassment, discrimination, client treatment, and international employment governance. The MVP detects policy violations, routes incidents to investigators based on severity, and maintains an auditable record of all compliance decisions and review outcomes.
+This repository defines a practical framework for an Agentic AI system that gates vendor spend: purchase orders and vendor transactions are checked against spend-approval thresholds and vendor due-diligence screening requirements before they're allowed to proceed. The MVP detects missing or failed controls, routes ambiguous or high-risk cases to a human reviewer, and maintains an auditable record of every compliance decision and review outcome.
 
 ## Current status
 
-This repository now contains the design foundation and a FastAPI MVP with four conduct-focused compliance controls, severity-based risk escalation, investigation workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
+This repository contains the design foundation and a FastAPI MVP with two procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
 
 It also includes workspace customization for Copilot:
 
@@ -14,23 +14,18 @@ It also includes workspace customization for Copilot:
 ## Contents
 
 - `docs/architecture.md` - end-to-end architecture and reference implementation design
-- `docs/ethics_workflow.md` - conduct and employee governance compliance workflow
 - `docs/mvp.md` - first MVP scope and build notes
-- `docs/risk_signals_and_escalation_rules.md` - escalation logic and investigation lifecycle
-- `docs/governance_operating_model.md` - governance ownership and assurance cadence
 - `app/` - FastAPI service and deterministic evaluation engine
-- `data/rules/` - versioned rule catalogs for conduct controls
-- `examples/` - sample incident report payloads
+- `data/rules/` - versioned rule catalogs for procurement controls
+- `examples/` - sample vendor-transaction payloads
 - `.github/agents/` - named Copilot agent definitions for this workspace
 
 ## Current MVP controls
 
-- `CONDUCT-HARASSMENT-001`: harassment and bullying incidents requiring severity assessment and mandatory investigation for medium/high-risk cases
-- `CONDUCT-DISCRIMINATION-001`: discrimination allegations involving protected characteristics require immediate escalation to HR and Legal
-- `CONDUCT-CLIENT-001`: client treatment and confidentiality breaches evaluated for business impact and reputation risk
-- `CONDUCT-INTL-GOV-001`: international employment law and regulatory compliance issues with jurisdiction-specific escalation
-- severity-based escalation: incidents are classified into risk bands (LOW, MEDIUM, HIGH, CRITICAL) with corresponding escalation actions
-- output: structured compliance decision record with severity scores, investigation recommendations, risk metadata, and review state
+- `PROC-SPEND-APPROVAL-001`: purchase-order spend at or above the approval threshold requires an on-file approval; spend at or above the dual-approval threshold requires two independent approvals
+- `PROC-VENDOR-DUEDILIGENCE-001`: new vendors, high-risk vendors, and spend at or above the screening threshold require completed vendor due-diligence screening, including a sanctions/watchlist check
+- severity-based escalation: transactions are classified into risk bands (LOW, MEDIUM, HIGH, CRITICAL) with corresponding escalation actions
+- output: structured compliance decision record with severity scores, risk metadata, and review state
 
 ## Run locally
 
@@ -57,36 +52,37 @@ Temporary migration fallback:
 - `GET /rules`
 - `GET /rules/current`
 - `GET /rules/{control_id}`
-- `POST /evaluate` - submit an incident for compliance evaluation
+- `POST /evaluate` - submit a vendor transaction for compliance evaluation
 - `GET /decisions`
 - `GET /decisions/{case_id}`
-- `GET /investigations/queue` - active investigation cases requiring action
-- `GET /investigations/metrics` - queue volume and aging metrics by risk band
-- `GET /reports/summary` - governance summary of decisions, investigations, and risk-band distributions
+- `GET /reviews/queue` - active review cases requiring action
+- `GET /reviews/metrics` - queue volume and aging metrics by risk band
+- `GET /reports/summary` - governance summary of decisions, reviews, and risk-band distributions
 - `GET /reviews/{case_id}`
-- `POST /reviews/{case_id}/assign` - assign investigator
-- `POST /reviews/{case_id}/start` - start investigation
-- `POST /reviews/{case_id}` - submit investigation outcome
-- `POST /reviews/{case_id}/reopen` - reopen case for additional investigation
+- `POST /reviews/{case_id}/assign` - assign reviewer
+- `POST /reviews/{case_id}/start` - start review
+- `POST /reviews/{case_id}` - submit review outcome
+- `POST /reviews/{case_id}/reopen` - reopen case for additional review
 
 ## Validated behavior
 
-- all four conduct rule catalogs load through the API
-- incident severity is calculated based on description length, protected characteristics, prior complaints, and involved party count
-- discrimination and international governance incidents automatically escalate to CRITICAL severity with mandatory investigation
-- harassment and client treatment incidents route to investigation based on computed severity bands
-- high-severity cases (HIGH/CRITICAL) require immediate investigation escalation to appropriate stakeholders
-- investigation-required cases enter the active queue and support assignment and workflow transitions
-- completed investigation cases can be reopened with explicit reopen reason tracking
-- investigation queue metrics aggregate active cases by severity band and track SLA aging
+- both procurement rule catalogs load through the API
+- transaction risk is calculated based on spend amount, vendor risk level, new-vendor status, and prior flagged transactions
+- missing required approval or vendor screening evidence returns `insufficient_evidence` and queues the case for review
+- an explicit approval denial or failed sanctions/watchlist screening returns `blocked` at CRITICAL risk
+- spend at or above the dual-approval threshold with only one approval on file returns `human_review_required`
+- fully-evidenced transactions with elevated risk (e.g. a high-risk vendor) are `approved` but still routed to mandatory review
+- review-required cases enter the active queue and support assignment and workflow transitions
+- completed review cases can be reopened with explicit reopen reason tracking
+- review queue metrics aggregate active cases by severity band and track SLA aging
 - summary reporting includes severity-band distributions for governance oversight
 - signed bearer token auth is enforced on protected endpoints with key-id support and optional legacy header fallback
-- role-based access controls protect sensitive incident and investigation data
-- append-only decision and investigation history is preserved alongside current case state
+- role-based access controls protect sensitive transaction and review data
+- append-only decision and review history is preserved alongside current case state
 
 ## Next steps
 
-- extend investigation workflow with formal investigation notes and evidence chain tracking
-- add jurisdiction-specific investigation protocols based on country code and regulatory requirements
-- implement escalation notifications to Legal, HR, and Management based on severity band
-- develop dashboard reporting for investigation metrics and governance oversight
+- extend vendor screening to capture jurisdiction-specific due-diligence requirements
+- implement escalation notifications to Procurement, Legal, and Finance based on severity band
+- develop dashboard reporting for review metrics and governance oversight
+- decide whether the previous employee-conduct domain content (`docs/ethics_workflow.md` and related narrative docs) should be archived, ported to a separate deployment, or retired

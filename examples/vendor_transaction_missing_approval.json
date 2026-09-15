@@ -1,0 +1,17 @@
+{
+  "case_id": "CASE-2002",
+  "transaction_id": "PO-5002",
+  "control_id": "PROC-SPEND-APPROVAL-001",
+  "vendor_name": "Meridian Consulting Group",
+  "vendor_id": "VEND-2087",
+  "new_vendor": false,
+  "vendor_risk_level": "low",
+  "requestor_role": "sales_manager",
+  "amount": 2500,
+  "currency": "USD",
+  "country_code": "US",
+  "business_justification": "Market research engagement for Q4 launch.",
+  "approval_record": null,
+  "vendor_screening_record": null,
+  "prior_flagged_transactions_12m": 0
+}

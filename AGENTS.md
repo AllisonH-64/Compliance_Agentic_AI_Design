@@ -1,10 +1,10 @@
 # Workspace Agent Instructions
 
-This workspace is a FastAPI compliance agent for employee conduct and workplace governance. Treat the repository as a deterministic compliance system, not a generic app.
+This workspace is a FastAPI compliance agent that gates vendor spend on approval thresholds and vendor due-diligence screening. Treat the repository as a deterministic compliance system, not a generic app.
 
 ## What this workspace does
 
-- Evaluates conduct and compliance incidents for harassment, discrimination, client treatment, and international governance.
+- Evaluates vendor purchase-order transactions for spend-approval thresholds (single and dual approval) and vendor due-diligence/sanctions screening.
 - Uses versioned rule catalogs under `data/rules/` and deterministic evaluation logic in `app/engine.py`.
 - Persists decisions and review state in SQLite through `app/storage.py`.
 - Exposes the API from `app/main.py` and validates behavior with `tests/test_api.py`.
