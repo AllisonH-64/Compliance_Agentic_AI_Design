@@ -218,6 +218,119 @@ def test_reports_summary_counts_completed_reviews_and_overrides(tmp_path: Path) 
     assert payload["reopened_case_count"] == 0
 
 
+def test_dashboard_summary_aggregates_by_control_and_signal(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "dashboard.db")
+    client = TestClient(app)
+
+    compliant_response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-dashboard-compliant-1",
+            "transaction_id": "po-dashboard-compliant-1",
+            "control_id": "PROC-SPEND-APPROVAL-001",
+            "vendor_name": "Acme Office Supplies",
+            "requestor_role": "office_manager",
+            "amount": 450,
+            "currency": "USD",
+            "business_justification": "Quarterly office supply restock.",
+        },
+    )
+    assert compliant_response.status_code == 200
+
+    missing_approval_response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-dashboard-missing-approval-1",
+            "transaction_id": "po-dashboard-missing-approval-1",
+            "control_id": "PROC-SPEND-APPROVAL-001",
+            "vendor_name": "Meridian Consulting Group",
+            "requestor_role": "sales_manager",
+            "amount": 2500,
+            "currency": "USD",
+            "business_justification": "Market research engagement.",
+        },
+    )
+    assert missing_approval_response.status_code == 200
+
+    denied_response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-dashboard-denied-1",
+            "transaction_id": "po-dashboard-denied-1",
+            "control_id": "PROC-SPEND-APPROVAL-001",
+            "vendor_name": "Meridian Consulting Group",
+            "requestor_role": "sales_manager",
+            "amount": 2500,
+            "currency": "USD",
+            "business_justification": "Market research engagement.",
+            "approval_record": {"approver_role": "compliance_manager", "approved": False},
+        },
+    )
+    assert denied_response.status_code == 200
+
+    missing_screening_response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-dashboard-missing-screening-1",
+            "transaction_id": "po-dashboard-missing-screening-1",
+            "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+            "vendor_name": "Novaline Freight Partners",
+            "new_vendor": True,
+            "requestor_role": "logistics_lead",
+            "amount": 1800,
+            "currency": "USD",
+            "business_justification": "First shipment contract with a new freight vendor.",
+        },
+    )
+    assert missing_screening_response.status_code == 200
+
+    response = client.get(
+        "/dashboard/summary",
+        headers=_auth_headers("auditor-1", "auditor"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_decisions"] == 4
+    assert payload["total_active_reviews"] == 3
+    assert payload["total_blocked"] == 1
+    assert payload["total_insufficient_evidence"] == 2
+
+    controls_by_id = {control["control_id"]: control for control in payload["controls"]}
+    # All five known controls should appear even if some had zero traffic.
+    assert set(controls_by_id) == {
+        "PROC-SPEND-APPROVAL-001",
+        "PROC-VENDOR-DUEDILIGENCE-001",
+        "PROC-INTL-VENDOR-001",
+        "PROC-VENDOR-COI-001",
+        "PROC-EXPENSE-RECEIPT-001",
+    }
+
+    spend_approval = controls_by_id["PROC-SPEND-APPROVAL-001"]
+    assert spend_approval["total_decisions"] == 3
+    assert spend_approval["approved_count"] == 1
+    assert spend_approval["blocked_count"] == 1
+    assert spend_approval["insufficient_evidence_count"] == 1
+    assert spend_approval["active_review_count"] == 2
+
+    due_diligence = controls_by_id["PROC-VENDOR-DUEDILIGENCE-001"]
+    assert due_diligence["total_decisions"] == 1
+    assert due_diligence["insufficient_evidence_count"] == 1
+
+    assert controls_by_id["PROC-INTL-VENDOR-001"]["total_decisions"] == 0
+
+    signal_counts = {signal["signal_id"]: signal["count"] for signal in payload["top_triggered_signals"]}
+    assert signal_counts["SIG-MISSING-APPROVAL"] == 1
+    assert signal_counts["SIG-APPROVAL-DENIED"] == 1
+    assert signal_counts["SIG-MISSING-VENDOR-SCREENING"] == 1
+
+    assert payload["queue_metrics"]["active_review_count"] == 3
+
+
 def test_evaluate_missing_approval_requires_evidence(tmp_path: Path) -> None:
     set_db_path(tmp_path / "missing-approval.db")
     client = TestClient(app)

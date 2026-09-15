@@ -8,9 +8,10 @@ import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from jwt import InvalidTokenError
 
-from app.engine import calculate_review_queue_metrics, evaluate_vendor_case, load_rule, load_rules
+from app.engine import calculate_dashboard_summary, calculate_review_queue_metrics, evaluate_vendor_case, load_rule, load_rules
 from app.models import (
     ComplianceSummaryReport,
+    DashboardSummary,
     DEFAULT_CONTROL_ID,
     DecisionRecord,
     DecisionState,
@@ -371,6 +372,16 @@ def get_summary_report(
         active_review_count_by_risk_band=active_review_count_by_risk_band,
         reopen_reason_counts=reopen_reason_counts,
     )
+
+
+@app.get("/dashboard/summary", response_model=DashboardSummary)
+def get_dashboard_summary(
+    _: Annotated[
+        AuthContext,
+        Depends(require_roles(UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER, UserRole.AUDITOR)),
+    ],
+) -> DashboardSummary:
+    return calculate_dashboard_summary(list_decisions())
 
 
 @app.get("/reviews/{case_id}", response_model=ReviewRecord)

@@ -56,6 +56,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 
 - GET /reviews/queue returns active review queue items
 - GET /reviews/metrics returns queue volume and SLA-aging metrics
+- GET /dashboard/summary returns a per-control decision breakdown, triggered-signal frequency, risk-band distribution, and the active review queue snapshot in one response
 - POST /reviews/{case_id}/assign assigns a reviewer
 - POST /reviews/{case_id}/start transitions to in_review
 - POST /reviews/{case_id} records final reviewer adjudication
@@ -70,6 +71,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - verified: append-only history captures decision and review lifecycle events
 - verified: queue metrics include status counts, SLA breach counts, and risk-band segmentation
 - verified: summary reporting includes totals, completed reviews, overrides, and reopen dimensions
+- verified: dashboard summary aggregates decisions per control (including zero-traffic controls) and per triggered signal
 - verified: bearer auth, issuer/audience checks, and key-id trust behavior are covered by tests
 - verified: `/reports/summary` and `/reviews/{case_id}/reopen` — previously broken by a field-name mismatch and a missing enum member from the prior domain — now work and are covered by tests
 

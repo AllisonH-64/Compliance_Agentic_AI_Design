@@ -61,6 +61,7 @@ Temporary migration fallback:
 - `GET /reviews/queue` - active review cases requiring action
 - `GET /reviews/metrics` - queue volume and aging metrics by risk band
 - `GET /reports/summary` - governance summary of decisions, reviews, and risk-band distributions
+- `GET /dashboard/summary` - per-control decision breakdown, triggered-signal frequency, risk-band distribution, and the active review queue snapshot in a single response
 - `GET /reviews/{case_id}`
 - `POST /reviews/{case_id}/assign` - assign reviewer
 - `POST /reviews/{case_id}/start` - start review
@@ -79,6 +80,7 @@ Temporary migration fallback:
 - completed review cases can be reopened with explicit reopen reason tracking
 - review queue metrics aggregate active cases by severity band and track SLA aging
 - summary reporting includes severity-band distributions for governance oversight
+- the dashboard summary breaks decisions down per control (including controls with zero traffic) and surfaces the most frequently triggered risk signals
 - signed bearer token auth is enforced on protected endpoints with key-id support and optional legacy header fallback
 - role-based access controls protect sensitive transaction and review data
 - append-only decision and review history is preserved alongside current case state
@@ -86,5 +88,4 @@ Temporary migration fallback:
 ## Next steps
 
 - implement escalation notifications to Procurement, Legal, and Finance based on severity band
-- develop dashboard reporting for review metrics and governance oversight
 - decide whether the previous employee-conduct domain content (`docs/ethics_workflow.md` and related narrative docs) should be archived, ported to a separate deployment, or retired

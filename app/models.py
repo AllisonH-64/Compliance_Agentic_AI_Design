@@ -254,3 +254,31 @@ class ComplianceSummaryReport(BaseModel):
     decision_count_by_risk_band: dict[RiskBand, int]
     active_review_count_by_risk_band: dict[RiskBand, int]
     reopen_reason_counts: dict[ReopenReason, int]
+
+
+class ControlSummary(BaseModel):
+    control_id: str
+    policy_name: str
+    total_decisions: int
+    approved_count: int
+    blocked_count: int
+    insufficient_evidence_count: int
+    human_review_required_count: int
+    active_review_count: int
+
+
+class SignalFrequency(BaseModel):
+    signal_id: str
+    count: int
+
+
+class DashboardSummary(BaseModel):
+    generated_at: str
+    total_decisions: int
+    total_active_reviews: int
+    total_blocked: int
+    total_insufficient_evidence: int
+    decision_count_by_risk_band: dict[RiskBand, int]
+    controls: list[ControlSummary]
+    top_triggered_signals: list[SignalFrequency]
+    queue_metrics: ReviewQueueMetrics

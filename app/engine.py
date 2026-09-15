@@ -3,7 +3,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.models import (
+    ControlSummary,
     DEFAULT_CONTROL_ID,
+    DashboardSummary,
     DecisionRecord,
     DecisionState,
     MarketRiskLevel,
@@ -11,6 +13,7 @@ from app.models import (
     ReviewQueueMetrics,
     ReviewStatus,
     RuleMetadata,
+    SignalFrequency,
     VendorTransaction,
 )
 
@@ -848,4 +851,84 @@ def calculate_review_queue_metrics(decisions: list[DecisionRecord], sla_target_h
         average_queue_age_hours=round(sum(queue_ages_hours) / len(queue_ages_hours), 2),
         oldest_queue_age_hours=round(max(queue_ages_hours), 2),
         sla_target_hours=sla_target_hours,
+    )
+
+
+def calculate_dashboard_summary(
+    decisions: list[DecisionRecord],
+    sla_target_hours: float = DEFAULT_SLA_HOURS,
+) -> DashboardSummary:
+    """Aggregate decisions into a governance dashboard: per-control breakdown, signal
+    frequency, risk-band distribution, and the active review queue snapshot."""
+    control_totals: dict[str, dict] = {}
+
+    for rule in load_rules():
+        control_totals[rule.control_id] = {
+            "policy_name": rule.policy_name,
+            "total_decisions": 0,
+            "approved_count": 0,
+            "blocked_count": 0,
+            "insufficient_evidence_count": 0,
+            "human_review_required_count": 0,
+            "active_review_count": 0,
+        }
+
+    decision_count_by_risk_band = {band: 0 for band in RiskBand}
+    signal_counts: dict[str, int] = {}
+
+    for decision in decisions:
+        control_id = decision.rule_metadata.control_id
+        totals = control_totals.setdefault(
+            control_id,
+            {
+                "policy_name": decision.rule_metadata.policy_name,
+                "total_decisions": 0,
+                "approved_count": 0,
+                "blocked_count": 0,
+                "insufficient_evidence_count": 0,
+                "human_review_required_count": 0,
+                "active_review_count": 0,
+            },
+        )
+        totals["total_decisions"] += 1
+
+        if decision.decision == DecisionState.APPROVED:
+            totals["approved_count"] += 1
+        elif decision.decision == DecisionState.BLOCKED:
+            totals["blocked_count"] += 1
+        elif decision.decision == DecisionState.INSUFFICIENT_EVIDENCE:
+            totals["insufficient_evidence_count"] += 1
+        elif decision.decision == DecisionState.HUMAN_REVIEW_REQUIRED:
+            totals["human_review_required_count"] += 1
+
+        if decision.review_required:
+            totals["active_review_count"] += 1
+
+        decision_count_by_risk_band[decision.risk_band] += 1
+
+        for signal_id in decision.triggered_signal_ids:
+            signal_counts[signal_id] = signal_counts.get(signal_id, 0) + 1
+
+    controls = [
+        ControlSummary(control_id=control_id, **totals) for control_id, totals in sorted(control_totals.items())
+    ]
+
+    top_triggered_signals = sorted(
+        (SignalFrequency(signal_id=signal_id, count=count) for signal_id, count in signal_counts.items()),
+        key=lambda signal: signal.count,
+        reverse=True,
+    )
+
+    return DashboardSummary(
+        generated_at=datetime.now(UTC).isoformat(),
+        total_decisions=len(decisions),
+        total_active_reviews=sum(1 for decision in decisions if decision.review_required),
+        total_blocked=sum(1 for decision in decisions if decision.decision == DecisionState.BLOCKED),
+        total_insufficient_evidence=sum(
+            1 for decision in decisions if decision.decision == DecisionState.INSUFFICIENT_EVIDENCE
+        ),
+        decision_count_by_risk_band=decision_count_by_risk_band,
+        controls=controls,
+        top_triggered_signals=top_triggered_signals,
+        queue_metrics=calculate_review_queue_metrics(decisions, sla_target_hours),
     )
