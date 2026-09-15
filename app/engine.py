@@ -132,6 +132,17 @@ def _build_base_evidence_references(vendor_transaction: VendorTransaction) -> li
                 f"misclassification_assessment_document:{vendor_transaction.misclassification_assessment_record.document_id}"
             )
 
+    if vendor_transaction.vendor_payment_details_changed:
+        evidence_references.append("vendor_payment_details_changed:true")
+
+    if vendor_transaction.payment_change_verification_record is not None:
+        evidence_references.append("payment_change_verification_record:attached")
+
+        if vendor_transaction.payment_change_verification_record.document_id is not None:
+            evidence_references.append(
+                f"payment_change_verification_document:{vendor_transaction.payment_change_verification_record.document_id}"
+            )
+
     return evidence_references
 
 
@@ -827,6 +838,162 @@ def _evaluate_expense_receipt(
     )
 
 
+def _evaluate_payment_change_verification(
+    vendor_transaction: VendorTransaction,
+    rule: RuleMetadata,
+    evaluated_at: str,
+) -> DecisionRecord:
+    """Evaluate whether a vendor payment/banking detail change has been independently
+    verified, guarding against business-email-compromise-style payment redirection
+    fraud. A transaction with no payment-detail change skips this scrutiny entirely."""
+    evidence_references = _build_base_evidence_references(vendor_transaction)
+
+    escalation_triggers = rule.escalation_triggers or {}
+    elevated_scrutiny_above_amount = escalation_triggers.get("elevated_scrutiny_above_amount", 5000)
+    risk_medium = escalation_triggers.get("risk_score_medium", 4)
+    risk_high = escalation_triggers.get("risk_score_high", 6)
+    risk_critical = escalation_triggers.get("risk_score_critical", 8)
+
+    if not vendor_transaction.vendor_payment_details_changed:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.APPROVED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="No vendor payment/banking detail change on this transaction; no elevated scrutiny required.",
+            severity_score=0.1,
+            confidence_score=0.9,
+            recommended_action="Approve and log. No further action required.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.LOW,
+            risk_score=0.1,
+            triggered_signal_ids=[],
+            signal_rationale=[],
+            escalation_decision="auto_close",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=False,
+            review_status=ReviewStatus.NOT_REQUIRED,
+            rule_metadata=rule,
+        )
+
+    record = vendor_transaction.payment_change_verification_record
+
+    if record is None or not record.verification_attempted:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.INSUFFICIENT_EVIDENCE,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                "Vendor payment/banking details were changed but no independent verification has been attempted."
+            ),
+            severity_score=0.65,
+            confidence_score=0.88,
+            recommended_action="Independently verify the change (e.g. callback to a known phone number) before releasing payment.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.65,
+            triggered_signal_ids=["SIG-MISSING-PAYMENT-CHANGE-VERIFICATION"],
+            signal_rationale=["A vendor payment/banking detail change requires independent verification before payment proceeds."],
+            escalation_decision="queue_for_verification",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if record.verified is False:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.BLOCKED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Verification of the vendor payment/banking detail change failed — possible fraud.",
+            severity_score=0.95,
+            confidence_score=0.9,
+            recommended_action="Block the payment. Escalate to Finance and Legal immediately as a suspected fraud incident.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.CRITICAL,
+            risk_score=0.95,
+            triggered_signal_ids=["SIG-PAYMENT-CHANGE-VERIFICATION-FAILED"],
+            signal_rationale=["Independent verification could not confirm the payment/banking detail change is legitimate."],
+            escalation_decision="mandatory_review",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if record.verified is None:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.HUMAN_REVIEW_REQUIRED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Verification of the vendor payment/banking detail change was attempted but is not yet confirmed.",
+            severity_score=0.6,
+            confidence_score=0.82,
+            recommended_action="Route to compliance manager for a verification determination before payment proceeds.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.6,
+            triggered_signal_ids=["SIG-PAYMENT-CHANGE-VERIFICATION-PENDING"],
+            signal_rationale=["A payment/banking detail change verification determination has not yet been made."],
+            escalation_decision="queue_for_determination",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    # record.verified is True: still carries an elevated baseline risk relative to a
+    # transaction with no payment-detail change, mirroring the same "cleared but still
+    # logged" precedent used for a cleared conflict of interest or a confirmed-contractor
+    # part-time engagement.
+    base_risk = 2.0 + 4.0
+
+    if vendor_transaction.amount >= elevated_scrutiny_above_amount:
+        base_risk += 1.5
+
+    if vendor_transaction.prior_flagged_transactions_12m >= 1:
+        base_risk += 1.0
+
+    base_risk = min(base_risk, 10.0)
+    risk_score = base_risk / 10.0
+    risk_band = _risk_band_for_score(base_risk, risk_medium, risk_high, risk_critical)
+    review_required = risk_band != RiskBand.LOW
+
+    if risk_band == RiskBand.CRITICAL:
+        action = "CRITICAL risk despite verified change. Immediate Finance and compliance manager review required."
+    elif risk_band == RiskBand.HIGH:
+        action = "Route to Finance for confirmation before payment is released."
+    elif risk_band == RiskBand.MEDIUM:
+        action = "Log for standard compliance review."
+    else:
+        action = "Approve and log. No further action required."
+
+    return DecisionRecord(
+        case_id=vendor_transaction.case_id,
+        transaction_id=vendor_transaction.transaction_id,
+        decision=DecisionState.APPROVED,
+        evaluated_at=evaluated_at,
+        reasoning_summary=f"Payment change verification evaluated with risk score {base_risk:.1f}/10.",
+        severity_score=risk_score,
+        confidence_score=0.85,
+        recommended_action=action,
+        evidence_references=evidence_references,
+        risk_band=risk_band,
+        risk_score=risk_score,
+        triggered_signal_ids=[],
+        signal_rationale=[],
+        escalation_decision="auto_close" if not review_required else "queue_for_review",
+        escalation_policy_version=VENDOR_ESCALATION_VERSION,
+        review_required=review_required,
+        review_status=ReviewStatus.PENDING if review_required else ReviewStatus.NOT_REQUIRED,
+        rule_metadata=rule,
+    )
+
+
 def _evaluate_gifts_and_hospitality(
     vendor_transaction: VendorTransaction,
     rule: RuleMetadata,
@@ -1155,7 +1322,9 @@ def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecor
     evaluated_at = datetime.now(UTC).isoformat()
 
     if rule.control_domain == "procurement":
-        if "GIFTS-HOSPITALITY" in rule.control_id:
+        if "PAYMENT-CHANGE" in rule.control_id:
+            decision_record = _evaluate_payment_change_verification(vendor_transaction, rule, evaluated_at)
+        elif "GIFTS-HOSPITALITY" in rule.control_id:
             decision_record = _evaluate_gifts_and_hospitality(vendor_transaction, rule, evaluated_at)
         elif "PART-TIME" in rule.control_id:
             decision_record = _evaluate_part_time_contract_classification(vendor_transaction, rule, evaluated_at)

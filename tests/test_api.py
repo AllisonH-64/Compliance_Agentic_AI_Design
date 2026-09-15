@@ -429,7 +429,7 @@ def test_dashboard_summary_aggregates_by_control_and_signal(tmp_path: Path) -> N
     assert payload["total_insufficient_evidence"] == 2
 
     controls_by_id = {control["control_id"]: control for control in payload["controls"]}
-    # All seven known controls should appear even if some had zero traffic.
+    # All eight known controls should appear even if some had zero traffic.
     assert set(controls_by_id) == {
         "PROC-SPEND-APPROVAL-001",
         "PROC-VENDOR-DUEDILIGENCE-001",
@@ -438,6 +438,7 @@ def test_dashboard_summary_aggregates_by_control_and_signal(tmp_path: Path) -> N
         "PROC-EXPENSE-RECEIPT-001",
         "PROC-PART-TIME-CONTRACT-001",
         "PROC-GIFTS-HOSPITALITY-001",
+        "PROC-VENDOR-PAYMENT-CHANGE-001",
     }
 
     spend_approval = controls_by_id["PROC-SPEND-APPROVAL-001"]
@@ -1410,6 +1411,116 @@ def test_gift_approval_denied_blocks_transaction(tmp_path: Path) -> None:
     assert payload["decision"] == "blocked"
     assert payload["risk_band"] == "critical"
     assert "SIG-GIFT-APPROVAL-DENIED" in payload["triggered_signal_ids"]
+
+
+def test_no_payment_change_skips_scrutiny(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "payment-change-none.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-payment-change-none-1",
+            "transaction_id": "po-payment-change-none-1",
+            "control_id": "PROC-VENDOR-PAYMENT-CHANGE-001",
+            "vendor_name": "Acme Office Supplies",
+            "requestor_role": "office_manager",
+            "amount": 450,
+            "currency": "USD",
+            "business_justification": "Quarterly office supply restock.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is False
+    assert payload["risk_band"] == "low"
+    assert payload["escalation_decision"] == "auto_close"
+
+
+def test_payment_change_missing_verification_requires_evidence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "payment-change-missing.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-payment-change-missing-1",
+            "transaction_id": "po-payment-change-missing-1",
+            "control_id": "PROC-VENDOR-PAYMENT-CHANGE-001",
+            "vendor_name": "Meridian Consulting Group",
+            "requestor_role": "accounts_payable_clerk",
+            "amount": 8000,
+            "currency": "USD",
+            "business_justification": "Quarterly retainer invoice; vendor emailed updated bank routing details.",
+            "vendor_payment_details_changed": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["risk_band"] == "high"
+    assert "SIG-MISSING-PAYMENT-CHANGE-VERIFICATION" in payload["triggered_signal_ids"]
+
+
+def test_payment_change_verification_failure_blocks_transaction(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "payment-change-failed.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-payment-change-failed-1",
+            "transaction_id": "po-payment-change-failed-1",
+            "control_id": "PROC-VENDOR-PAYMENT-CHANGE-001",
+            "vendor_name": "Meridian Consulting Group",
+            "requestor_role": "accounts_payable_clerk",
+            "amount": 8000,
+            "currency": "USD",
+            "business_justification": "Quarterly retainer invoice; vendor emailed updated bank routing details.",
+            "vendor_payment_details_changed": True,
+            "payment_change_verification_record": {"verification_attempted": True, "verified": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "blocked"
+    assert payload["risk_band"] == "critical"
+    assert "SIG-PAYMENT-CHANGE-VERIFICATION-FAILED" in payload["triggered_signal_ids"]
+
+
+def test_payment_change_verified_still_routes_to_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "payment-change-verified.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-payment-change-verified-1",
+            "transaction_id": "po-payment-change-verified-1",
+            "control_id": "PROC-VENDOR-PAYMENT-CHANGE-001",
+            "vendor_name": "Meridian Consulting Group",
+            "requestor_role": "accounts_payable_clerk",
+            "amount": 3200,
+            "currency": "USD",
+            "business_justification": "Quarterly retainer invoice; vendor updated bank routing details after a branch consolidation.",
+            "vendor_payment_details_changed": True,
+            "payment_change_verification_record": {"verification_attempted": True, "verified": True},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is True
+    assert payload["risk_band"] in ("high", "critical")
 
 
 def test_review_metrics_counts_sla_breach_for_aged_case(tmp_path: Path) -> None:

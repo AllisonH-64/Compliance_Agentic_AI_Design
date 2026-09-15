@@ -112,6 +112,22 @@ class MisclassificationAssessmentRecord(BaseModel):
     document_id: str | None = Field(default=None, description="Identifier for the classification assessment document")
 
 
+class PaymentChangeVerificationRecord(BaseModel):
+    verification_attempted: bool = Field(
+        ..., description="Whether independent verification of the payment/banking detail change was attempted"
+    )
+    verified: bool | None = Field(
+        default=None,
+        description="Verification outcome: True confirmed legitimate, False failed/suspected fraud, None still pending",
+    )
+    verification_method: str | None = Field(
+        default=None,
+        description="How the change was verified, e.g. callback to a known phone number, in-person confirmation",
+    )
+    verified_by: str | None = Field(default=None, description="Identifier of the person who performed the verification")
+    document_id: str | None = Field(default=None, description="Identifier for the verification record document")
+
+
 class PolicyReference(BaseModel):
     source_type: PolicyReferenceType
     citation: str = Field(..., description="Name/title of the regulation, standard, or internal policy")
@@ -204,6 +220,14 @@ class VendorTransaction(BaseModel):
     gift_recipient_type: GiftRecipientType = Field(
         default=GiftRecipientType.COMMERCIAL_CONTACT,
         description="Nature of the counterparty for a gift/hospitality/entertainment transaction; government officials require stricter pre-approval",
+    )
+    vendor_payment_details_changed: bool = Field(
+        default=False,
+        description="Whether this transaction reflects a change to the vendor's banking/payment details",
+    )
+    payment_change_verification_record: PaymentChangeVerificationRecord | None = Field(
+        default=None,
+        description="Independent verification evidence for a vendor payment/banking detail change",
     )
     prior_flagged_transactions_12m: int = Field(
         default=0,

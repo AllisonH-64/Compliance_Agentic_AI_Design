@@ -1,0 +1,12 @@
+{
+  "case_id": "CASE-2027",
+  "transaction_id": "PO-5027",
+  "control_id": "PROC-VENDOR-PAYMENT-CHANGE-001",
+  "vendor_name": "Acme Office Supplies",
+  "requestor_role": "office_manager",
+  "amount": 450,
+  "currency": "USD",
+  "business_justification": "Quarterly office supply restock.",
+  "vendor_payment_details_changed": false,
+  "prior_flagged_transactions_12m": 0
+}

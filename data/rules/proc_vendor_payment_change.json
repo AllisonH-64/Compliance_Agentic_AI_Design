@@ -1,0 +1,58 @@
+{
+  "control_id": "PROC-VENDOR-PAYMENT-CHANGE-001",
+  "control_domain": "procurement",
+  "policy_name": "Vendor Payment and Banking Detail Change Verification Policy",
+  "policy_version": "2026-09-01",
+  "description": "A change to a vendor's payment or banking details requires independent verification, through a channel separate from the one that requested the change, before any payment is released against the new details. This guards against business-email-compromise-style payment redirection fraud.",
+  "severity_threshold": 4,
+  "required_evidence": [
+    "payment_change_verification_record"
+  ],
+  "required_reviewer_role": "compliance_manager",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "elevated_scrutiny_above_amount": 5000,
+    "risk_score_medium": 4,
+    "risk_score_high": 6,
+    "risk_score_critical": 8,
+    "notification_recipients": {
+      "low": [],
+      "medium": ["procurement"],
+      "high": ["procurement", "finance"],
+      "critical": ["procurement", "finance", "legal"]
+    }
+  },
+  "policy_references": [
+    {
+      "source_type": "external_regulation",
+      "citation": "Computer Misuse Act, Chapter 124B",
+      "jurisdiction": "Barbados",
+      "source_url": "https://dig.watch/resource/computer-misuse-act-chapter-124b-barbados",
+      "notes": "Enacted 2005; criminalizes using a computer to secure access to a system or data with intent to commit an offence involving property, fraud, or dishonesty (penalty up to $50,000 or 5 years imprisonment on indictment). Directly relevant to business-email-compromise-style payment redirection fraud. A Cybercrime Bill 2021 was in draft to replace/supplement it as of this research; the current Act remains the operative law and should be revisited if that bill passes."
+    },
+    {
+      "source_type": "external_regulation",
+      "citation": "National Payment System Act, 2021 (Barbados)",
+      "jurisdiction": "Barbados",
+      "authority": "Central Bank of Barbados",
+      "source_url": "https://www.centralbank.org.bb/news/general-press-release/developments-in-barbados-payment-system",
+      "notes": "Passed February 2021; establishes Central Bank oversight, regulation, and licensing of payment system participants. Supports verifying payment instruction changes before funds move through the regulated payment system."
+    },
+    {
+      "source_type": "external_regulation",
+      "citation": "Money Laundering and Financing of Terrorism (Prevention and Control) Act, 2011-23 (as amended by the 2019-22 Amendment Act)",
+      "jurisdiction": "Barbados",
+      "authority": "Anti-Money Laundering Authority (AMLA) / Financial Intelligence Unit, Barbados",
+      "source_url": "https://www.fsc.gov.bb/viewPDF/documents/2023-05-16-19-31-31-moneylaunderingandfinancingofterrorismpreventionandcontrolact-2011-23.pdf",
+      "notes": "Ongoing customer due-diligence duties extend to verifying that payment instructions remain consistent with known customer/vendor information, relevant to detecting fraudulent redirection of funds."
+    },
+    {
+      "source_type": "internal_policy",
+      "citation": "Internal Payment Change Verification Standard",
+      "jurisdiction": "Company-wide",
+      "notes": "Sets elevated_scrutiny_above_amount. No numeric regulatory floor was found for this value."
+    }
+  ]
+}

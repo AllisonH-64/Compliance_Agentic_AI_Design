@@ -1,0 +1,17 @@
+{
+  "case_id": "CASE-2029",
+  "transaction_id": "PO-5029",
+  "control_id": "PROC-VENDOR-PAYMENT-CHANGE-001",
+  "vendor_name": "Meridian Consulting Group",
+  "requestor_role": "accounts_payable_clerk",
+  "amount": 8000,
+  "currency": "USD",
+  "business_justification": "Quarterly retainer invoice; vendor emailed updated bank routing details.",
+  "vendor_payment_details_changed": true,
+  "payment_change_verification_record": {
+    "verification_attempted": true,
+    "verified": false,
+    "verification_method": "callback_to_known_number"
+  },
+  "prior_flagged_transactions_12m": 0
+}
