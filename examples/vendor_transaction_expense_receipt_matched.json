@@ -1,0 +1,15 @@
+{
+  "case_id": "CASE-2017",
+  "transaction_id": "PO-5017",
+  "control_id": "PROC-EXPENSE-RECEIPT-001",
+  "vendor_name": "Riverside Hotel",
+  "requestor_role": "account_executive",
+  "amount": 120,
+  "currency": "USD",
+  "business_justification": "One-night stay for a client site visit.",
+  "receipt_record": {
+    "attached": true,
+    "receipt_total": 120.0
+  },
+  "prior_flagged_transactions_12m": 0
+}

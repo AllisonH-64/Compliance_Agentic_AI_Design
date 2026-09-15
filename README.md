@@ -4,7 +4,7 @@ This repository defines a practical framework for an Agentic AI system that gate
 
 ## Current status
 
-This repository contains the design foundation and a FastAPI MVP with four procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
+This repository contains the design foundation and a FastAPI MVP with five procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
 
 It also includes workspace customization for Copilot:
 
@@ -26,6 +26,7 @@ It also includes workspace customization for Copilot:
 - `PROC-VENDOR-DUEDILIGENCE-001`: new vendors, high-risk vendors, and spend at or above the screening threshold require completed vendor due-diligence screening, including a sanctions/watchlist check
 - `PROC-INTL-VENDOR-001`: vendors based in a designated high-risk jurisdiction (versioned country-code list in the rule catalog), or spend at or above the enhanced due-diligence threshold, require completed screening plus enhanced due-diligence sign-off (e.g. local counsel review)
 - `PROC-VENDOR-COI-001`: a flagged potential conflict of interest between the requestor and the vendor requires formal disclosure and an explicit compliance clearance decision; a cleared conflict still routes to mandatory review rather than auto-closing
+- `PROC-EXPENSE-RECEIPT-001`: expenses at or above the receipt threshold require an attached itemized receipt; a receipt total that doesn't reconcile with the claimed amount within tolerance routes to human review
 - severity-based escalation: transactions are classified into risk bands (LOW, MEDIUM, HIGH, CRITICAL) with corresponding escalation actions
 - output: structured compliance decision record with severity scores, risk metadata, and review state
 

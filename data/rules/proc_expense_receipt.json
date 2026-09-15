@@ -1,0 +1,22 @@
+{
+  "control_id": "PROC-EXPENSE-RECEIPT-001",
+  "control_domain": "procurement",
+  "policy_name": "Expense Receipt Documentation Policy",
+  "policy_version": "2026-09-01",
+  "description": "Expenses and vendor transactions at or above the receipt threshold require an attached, itemized receipt on file. A receipt total that does not reconcile with the claimed amount within tolerance requires compliance review.",
+  "severity_threshold": 3,
+  "required_evidence": [
+    "receipt_record"
+  ],
+  "required_reviewer_role": "compliance_analyst",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "receipt_required_above_amount": 75,
+    "receipt_mismatch_tolerance": 0.05,
+    "risk_score_medium": 4,
+    "risk_score_high": 6,
+    "risk_score_critical": 8
+  }
+}

@@ -71,6 +71,15 @@ class ConflictOfInterestRecord(BaseModel):
     document_id: str | None = Field(default=None, description="Identifier for the conflict-of-interest disclosure document")
 
 
+class ReceiptRecord(BaseModel):
+    attached: bool = Field(..., description="Whether a receipt or itemized invoice has been attached for this expense")
+    receipt_total: float | None = Field(
+        default=None,
+        description="Total amount shown on the attached receipt, for reconciliation against the claimed amount",
+    )
+    document_id: str | None = Field(default=None, description="Identifier for the receipt document")
+
+
 class VendorScreeningRecord(BaseModel):
     completed: bool = Field(..., description="Whether vendor due-diligence screening has been completed")
     sanctions_check_passed: bool | None = Field(
@@ -130,6 +139,10 @@ class VendorTransaction(BaseModel):
     conflict_of_interest_record: ConflictOfInterestRecord | None = Field(
         default=None,
         description="Conflict-of-interest disclosure and compliance clearance evidence",
+    )
+    receipt_record: ReceiptRecord | None = Field(
+        default=None,
+        description="Receipt or itemized invoice evidence attached to the expense",
     )
     prior_flagged_transactions_12m: int = Field(
         default=0,

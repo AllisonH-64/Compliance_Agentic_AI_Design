@@ -783,6 +783,117 @@ def test_no_flagged_coi_auto_closes(tmp_path: Path) -> None:
     assert payload["escalation_decision"] == "auto_close"
 
 
+def test_evaluate_missing_receipt_requires_evidence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "receipt-missing.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-receipt-missing-1",
+            "transaction_id": "po-receipt-missing-1",
+            "control_id": "PROC-EXPENSE-RECEIPT-001",
+            "vendor_name": "Riverside Hotel",
+            "requestor_role": "account_executive",
+            "amount": 120,
+            "currency": "USD",
+            "business_justification": "One-night stay for a client site visit.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["risk_band"] == "medium"
+    assert payload["review_required"] is True
+    assert "SIG-MISSING-RECEIPT" in payload["triggered_signal_ids"]
+
+
+def test_receipt_amount_mismatch_requires_human_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "receipt-mismatch.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-receipt-mismatch-1",
+            "transaction_id": "po-receipt-mismatch-1",
+            "control_id": "PROC-EXPENSE-RECEIPT-001",
+            "vendor_name": "Riverside Hotel",
+            "requestor_role": "account_executive",
+            "amount": 120,
+            "currency": "USD",
+            "business_justification": "One-night stay for a client site visit.",
+            "receipt_record": {"attached": True, "receipt_total": 45.0},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "human_review_required"
+    assert payload["risk_band"] == "high"
+    assert "SIG-RECEIPT-AMOUNT-MISMATCH" in payload["triggered_signal_ids"]
+
+
+def test_receipt_matched_case_auto_closes(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "receipt-matched.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-receipt-matched-1",
+            "transaction_id": "po-receipt-matched-1",
+            "control_id": "PROC-EXPENSE-RECEIPT-001",
+            "vendor_name": "Riverside Hotel",
+            "requestor_role": "account_executive",
+            "amount": 80,
+            "currency": "USD",
+            "business_justification": "One-night stay for a client site visit.",
+            "receipt_record": {"attached": True, "receipt_total": 80.0},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is False
+    assert payload["risk_band"] == "low"
+    assert payload["escalation_decision"] == "auto_close"
+
+
+def test_receipt_matched_with_prior_flag_routes_to_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "receipt-flagged.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-receipt-flagged-1",
+            "transaction_id": "po-receipt-flagged-1",
+            "control_id": "PROC-EXPENSE-RECEIPT-001",
+            "vendor_name": "Riverside Hotel",
+            "requestor_role": "account_executive",
+            "amount": 500,
+            "currency": "USD",
+            "business_justification": "Multi-night stay for an extended client engagement.",
+            "receipt_record": {"attached": True, "receipt_total": 500.0},
+            "prior_flagged_transactions_12m": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is True
+    assert payload["risk_band"] == "medium"
+    assert payload["escalation_decision"] == "queue_for_review"
+
+
 def test_review_metrics_counts_sla_breach_for_aged_case(tmp_path: Path) -> None:
     set_db_path(tmp_path / "metrics-sla.db")
     client = TestClient(app)

@@ -76,6 +76,12 @@ def _build_base_evidence_references(vendor_transaction: VendorTransaction) -> li
                 f"conflict_of_interest_document:{vendor_transaction.conflict_of_interest_record.document_id}"
             )
 
+    if vendor_transaction.receipt_record is not None:
+        evidence_references.append("receipt_record:attached")
+
+        if vendor_transaction.receipt_record.document_id is not None:
+            evidence_references.append(f"receipt_document:{vendor_transaction.receipt_record.document_id}")
+
     return evidence_references
 
 
@@ -656,13 +662,130 @@ def _evaluate_conflict_of_interest(
     )
 
 
+def _evaluate_expense_receipt(
+    vendor_transaction: VendorTransaction,
+    rule: RuleMetadata,
+    evaluated_at: str,
+) -> DecisionRecord:
+    """Evaluate whether an expense has the required receipt documentation on file."""
+    evidence_references = _build_base_evidence_references(vendor_transaction)
+
+    escalation_triggers = rule.escalation_triggers or {}
+    receipt_required_above_amount = escalation_triggers.get("receipt_required_above_amount", 75)
+    receipt_mismatch_tolerance = escalation_triggers.get("receipt_mismatch_tolerance", 0.05)
+    risk_medium = escalation_triggers.get("risk_score_medium", 4)
+    risk_high = escalation_triggers.get("risk_score_high", 6)
+    risk_critical = escalation_triggers.get("risk_score_critical", 8)
+
+    receipt_required = vendor_transaction.amount >= receipt_required_above_amount
+    record = vendor_transaction.receipt_record
+
+    if receipt_required and (record is None or not record.attached):
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.INSUFFICIENT_EVIDENCE,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                f"Expense amount {vendor_transaction.amount} meets the receipt threshold "
+                f"({receipt_required_above_amount}) but no receipt is attached."
+            ),
+            severity_score=0.45,
+            confidence_score=0.85,
+            recommended_action="Request an itemized receipt before the expense is reimbursed or spend proceeds.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.MEDIUM,
+            risk_score=0.45,
+            triggered_signal_ids=["SIG-MISSING-RECEIPT"],
+            signal_rationale=["Spend at or above the receipt threshold requires an attached itemized receipt."],
+            escalation_decision="queue_for_receipt",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if record is not None and record.attached and record.receipt_total is not None:
+        mismatch_ratio = abs(record.receipt_total - vendor_transaction.amount) / max(vendor_transaction.amount, 0.01)
+
+        if mismatch_ratio > receipt_mismatch_tolerance:
+            return DecisionRecord(
+                case_id=vendor_transaction.case_id,
+                transaction_id=vendor_transaction.transaction_id,
+                decision=DecisionState.HUMAN_REVIEW_REQUIRED,
+                evaluated_at=evaluated_at,
+                reasoning_summary=(
+                    f"Receipt total {record.receipt_total} does not reconcile with the claimed amount "
+                    f"{vendor_transaction.amount} within tolerance."
+                ),
+                severity_score=0.7,
+                confidence_score=0.85,
+                recommended_action="Route to compliance analyst to reconcile the receipt total against the claimed amount.",
+                evidence_references=evidence_references,
+                risk_band=RiskBand.HIGH,
+                risk_score=0.7,
+                triggered_signal_ids=["SIG-RECEIPT-AMOUNT-MISMATCH"],
+                signal_rationale=["Attached receipt total does not reconcile with the claimed transaction amount."],
+                escalation_decision="queue_for_review",
+                escalation_policy_version=VENDOR_ESCALATION_VERSION,
+                review_required=True,
+                review_status=ReviewStatus.PENDING,
+                rule_metadata=rule,
+            )
+
+    base_risk = 2.0
+
+    if receipt_required:
+        base_risk += 1.0
+
+    if vendor_transaction.prior_flagged_transactions_12m >= 1:
+        base_risk += 1.5
+
+    base_risk = min(base_risk, 10.0)
+    risk_score = base_risk / 10.0
+    risk_band = _risk_band_for_score(base_risk, risk_medium, risk_high, risk_critical)
+    review_required = risk_band != RiskBand.LOW
+
+    if risk_band == RiskBand.CRITICAL:
+        action = "CRITICAL risk despite reconciled receipt. Immediate compliance manager review required."
+    elif risk_band == RiskBand.HIGH:
+        action = "Route to compliance analyst for review before reimbursement is released."
+    elif risk_band == RiskBand.MEDIUM:
+        action = "Log for standard compliance review."
+    else:
+        action = "Approve and log. No further action required."
+
+    return DecisionRecord(
+        case_id=vendor_transaction.case_id,
+        transaction_id=vendor_transaction.transaction_id,
+        decision=DecisionState.APPROVED,
+        evaluated_at=evaluated_at,
+        reasoning_summary=f"Expense receipt evaluation completed with risk score {base_risk:.1f}/10.",
+        severity_score=risk_score,
+        confidence_score=0.88,
+        recommended_action=action,
+        evidence_references=evidence_references,
+        risk_band=risk_band,
+        risk_score=risk_score,
+        triggered_signal_ids=[],
+        signal_rationale=[],
+        escalation_decision="auto_close" if not review_required else "queue_for_review",
+        escalation_policy_version=VENDOR_ESCALATION_VERSION,
+        review_required=review_required,
+        review_status=ReviewStatus.PENDING if review_required else ReviewStatus.NOT_REQUIRED,
+        rule_metadata=rule,
+    )
+
+
 def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecord:
     """Evaluate a vendor transaction case against the applicable procurement rule."""
     rule = load_rule(vendor_transaction.control_id)
     evaluated_at = datetime.now(UTC).isoformat()
 
     if rule.control_domain == "procurement":
-        if "COI" in rule.control_id:
+        if "RECEIPT" in rule.control_id:
+            return _evaluate_expense_receipt(vendor_transaction, rule, evaluated_at)
+        elif "COI" in rule.control_id:
             return _evaluate_conflict_of_interest(vendor_transaction, rule, evaluated_at)
         elif "INTL" in rule.control_id:
             return _evaluate_jurisdiction_due_diligence(vendor_transaction, rule, evaluated_at)
