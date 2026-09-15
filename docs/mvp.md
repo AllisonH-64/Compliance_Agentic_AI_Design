@@ -14,6 +14,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 
 - PROC-SPEND-APPROVAL-001: purchase-order spend-approval threshold and dual-approval enforcement
 - PROC-VENDOR-DUEDILIGENCE-001: vendor due-diligence and sanctions/watchlist screening requirements
+- PROC-INTL-VENDOR-001: jurisdiction-specific enhanced due-diligence, driven by a versioned high-risk country-code list in the rule catalog rather than a caller-supplied risk flag
 
 ## Decision Outcomes
 
@@ -28,7 +29,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - app/engine.py loads rule catalogs and applies deterministic procurement evaluation logic
 - app/models.py defines vendor-transaction, decision, and review schemas
 - app/storage.py persists current records plus append-only decision and review history
-- data/rules contains versioned control metadata for the two procurement controls
+- data/rules contains versioned control metadata for the three procurement controls
 - examples contains vendor-transaction sample payloads for manual testing
 - tests/test_api.py contains API tests for auth, workflow, metrics, and summary behavior
 
@@ -61,7 +62,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 
 ## Current Validation Status
 
-- verified: both procurement rule catalogs load via API endpoints
+- verified: all three procurement rule catalogs load via API endpoints
 - verified: deterministic transaction evaluation returns structured decision records
 - verified: assignment, start, submit, and reopen lifecycle transitions persist correctly
 - verified: append-only history captures decision and review lifecycle events
@@ -72,7 +73,6 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 
 ## Immediate Next Build Step
 
-- add jurisdiction-specific due-diligence requirements based on vendor country code
 - add explicit event emissions for risk computation and escalation transitions
 - extend summary outputs with median and p95 review turnaround metrics
 - decide the fate of the retired employee-conduct rule catalogs and narrative docs (archive vs. separate deployment)

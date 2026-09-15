@@ -1,0 +1,16 @@
+{
+  "case_id": "CASE-2007",
+  "transaction_id": "PO-5007",
+  "control_id": "PROC-INTL-VENDOR-001",
+  "vendor_name": "Baltic Components LLC",
+  "vendor_id": "VEND-7014",
+  "new_vendor": true,
+  "vendor_risk_level": "medium",
+  "requestor_role": "procurement_lead",
+  "amount": 1200,
+  "currency": "USD",
+  "country_code": "RU",
+  "business_justification": "Specialty electronic components sourcing.",
+  "vendor_screening_record": null,
+  "prior_flagged_transactions_12m": 0
+}

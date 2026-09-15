@@ -4,7 +4,7 @@ This repository defines a practical framework for an Agentic AI system that gate
 
 ## Current status
 
-This repository contains the design foundation and a FastAPI MVP with two procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
+This repository contains the design foundation and a FastAPI MVP with three procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
 
 It also includes workspace customization for Copilot:
 
@@ -24,6 +24,7 @@ It also includes workspace customization for Copilot:
 
 - `PROC-SPEND-APPROVAL-001`: purchase-order spend at or above the approval threshold requires an on-file approval; spend at or above the dual-approval threshold requires two independent approvals
 - `PROC-VENDOR-DUEDILIGENCE-001`: new vendors, high-risk vendors, and spend at or above the screening threshold require completed vendor due-diligence screening, including a sanctions/watchlist check
+- `PROC-INTL-VENDOR-001`: vendors based in a designated high-risk jurisdiction (versioned country-code list in the rule catalog), or spend at or above the enhanced due-diligence threshold, require completed screening plus enhanced due-diligence sign-off (e.g. local counsel review)
 - severity-based escalation: transactions are classified into risk bands (LOW, MEDIUM, HIGH, CRITICAL) with corresponding escalation actions
 - output: structured compliance decision record with severity scores, risk metadata, and review state
 
@@ -82,7 +83,6 @@ Temporary migration fallback:
 
 ## Next steps
 
-- extend vendor screening to capture jurisdiction-specific due-diligence requirements
 - implement escalation notifications to Procurement, Legal, and Finance based on severity band
 - develop dashboard reporting for review metrics and governance oversight
 - decide whether the previous employee-conduct domain content (`docs/ethics_workflow.md` and related narrative docs) should be archived, ported to a separate deployment, or retired

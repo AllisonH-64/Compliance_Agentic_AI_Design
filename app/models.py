@@ -68,6 +68,10 @@ class VendorScreeningRecord(BaseModel):
         default=None,
         description="Result of sanctions/watchlist screening, if completed",
     )
+    enhanced_due_diligence_completed: bool = Field(
+        default=False,
+        description="Whether enhanced due diligence (e.g. local counsel review) has been completed, required for high-risk jurisdictions",
+    )
     document_id: str | None = Field(default=None, description="Identifier for the screening record document")
 
 

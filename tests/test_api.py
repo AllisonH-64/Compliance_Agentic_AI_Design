@@ -521,6 +521,129 @@ def test_review_metrics_counts_pending_assigned_and_in_review(tmp_path: Path) ->
     assert payload["oldest_queue_age_hours"] >= 0
 
 
+def test_evaluate_missing_screening_for_high_risk_jurisdiction(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "jurisdiction-missing-screening.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-jurisdiction-missing-screening-1",
+            "transaction_id": "po-jurisdiction-missing-screening-1",
+            "control_id": "PROC-INTL-VENDOR-001",
+            "vendor_name": "Baltic Components LLC",
+            "new_vendor": True,
+            "requestor_role": "procurement_lead",
+            "amount": 1200,
+            "currency": "USD",
+            "country_code": "RU",
+            "business_justification": "Specialty electronic components sourcing.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["review_required"] is True
+    assert "SIG-MISSING-VENDOR-SCREENING" in payload["triggered_signal_ids"]
+
+
+def test_high_risk_jurisdiction_requires_enhanced_due_diligence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "jurisdiction-missing-edd.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-jurisdiction-missing-edd-1",
+            "transaction_id": "po-jurisdiction-missing-edd-1",
+            "control_id": "PROC-INTL-VENDOR-001",
+            "vendor_name": "Baltic Components LLC",
+            "new_vendor": True,
+            "requestor_role": "procurement_lead",
+            "amount": 1200,
+            "currency": "USD",
+            "country_code": "RU",
+            "business_justification": "Specialty electronic components sourcing.",
+            "vendor_screening_record": {
+                "completed": True,
+                "sanctions_check_passed": True,
+                "enhanced_due_diligence_completed": False,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "human_review_required"
+    assert payload["review_required"] is True
+    assert "SIG-ENHANCED-DD-REQUIRED" in payload["triggered_signal_ids"]
+
+
+def test_high_risk_jurisdiction_compliant_still_routes_to_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "jurisdiction-compliant.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-jurisdiction-compliant-1",
+            "transaction_id": "po-jurisdiction-compliant-1",
+            "control_id": "PROC-INTL-VENDOR-001",
+            "vendor_name": "Baltic Components LLC",
+            "new_vendor": True,
+            "requestor_role": "procurement_lead",
+            "amount": 1200,
+            "currency": "USD",
+            "country_code": "RU",
+            "business_justification": "Specialty electronic components sourcing.",
+            "vendor_screening_record": {
+                "completed": True,
+                "sanctions_check_passed": True,
+                "enhanced_due_diligence_completed": True,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is True
+    assert payload["risk_band"] in ("high", "critical")
+    assert payload["escalation_decision"] == "queue_for_review"
+
+
+def test_low_risk_jurisdiction_auto_closes(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "jurisdiction-low-risk.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-jurisdiction-low-risk-1",
+            "transaction_id": "po-jurisdiction-low-risk-1",
+            "control_id": "PROC-INTL-VENDOR-001",
+            "vendor_name": "Alpine Precision Tools",
+            "requestor_role": "procurement_lead",
+            "amount": 800,
+            "currency": "USD",
+            "country_code": "CH",
+            "business_justification": "Standard tooling order from an established EU vendor.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is False
+    assert payload["risk_band"] == "low"
+    assert payload["escalation_decision"] == "auto_close"
+
+
 def test_review_metrics_counts_sla_breach_for_aged_case(tmp_path: Path) -> None:
     set_db_path(tmp_path / "metrics-sla.db")
     client = TestClient(app)

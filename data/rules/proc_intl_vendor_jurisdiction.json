@@ -1,0 +1,22 @@
+{
+  "control_id": "PROC-INTL-VENDOR-001",
+  "control_domain": "procurement",
+  "policy_name": "International Vendor Jurisdiction Due-Diligence Policy",
+  "policy_version": "2026-09-01",
+  "description": "Vendors based in a designated high-risk jurisdiction, or spend at or above the enhanced due-diligence threshold, require completed vendor screening plus enhanced due-diligence sign-off (e.g. local counsel review) before spend is incurred.",
+  "severity_threshold": 4,
+  "required_evidence": [
+    "vendor_screening_record"
+  ],
+  "required_reviewer_role": "compliance_manager",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "high_risk_country_codes": ["IR", "KP", "SY", "CU", "RU", "MM", "VE", "AF"],
+    "enhanced_dd_required_above_amount": 5000,
+    "risk_score_medium": 4,
+    "risk_score_high": 6,
+    "risk_score_critical": 8
+  }
+}

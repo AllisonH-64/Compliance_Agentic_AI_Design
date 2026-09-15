@@ -366,13 +366,165 @@ def _evaluate_vendor_due_diligence(
     )
 
 
+def _evaluate_jurisdiction_due_diligence(
+    vendor_transaction: VendorTransaction,
+    rule: RuleMetadata,
+    evaluated_at: str,
+) -> DecisionRecord:
+    """Evaluate vendor screening against jurisdiction-specific enhanced due-diligence requirements."""
+    evidence_references = _build_base_evidence_references(vendor_transaction)
+
+    if vendor_transaction.country_code:
+        evidence_references.append(f"jurisdiction:{vendor_transaction.country_code}")
+
+    escalation_triggers = rule.escalation_triggers or {}
+    high_risk_country_codes = set(escalation_triggers.get("high_risk_country_codes", []))
+    enhanced_dd_required_above_amount = escalation_triggers.get("enhanced_dd_required_above_amount", 5000)
+    risk_medium = escalation_triggers.get("risk_score_medium", 4)
+    risk_high = escalation_triggers.get("risk_score_high", 6)
+    risk_critical = escalation_triggers.get("risk_score_critical", 8)
+
+    is_high_risk_jurisdiction = (
+        vendor_transaction.country_code is not None and vendor_transaction.country_code in high_risk_country_codes
+    )
+
+    if is_high_risk_jurisdiction:
+        evidence_references.append("jurisdiction:high_risk")
+
+    base_risk = 2.0
+
+    if is_high_risk_jurisdiction:
+        base_risk += 4.0
+
+    if vendor_transaction.amount >= enhanced_dd_required_above_amount:
+        base_risk += 1.5
+
+    if vendor_transaction.new_vendor:
+        base_risk += 1.0
+
+    if vendor_transaction.prior_flagged_transactions_12m >= 1:
+        base_risk += 1.0
+
+    base_risk = min(base_risk, 10.0)
+    risk_score = base_risk / 10.0
+    risk_band = _risk_band_for_score(base_risk, risk_medium, risk_high, risk_critical)
+
+    enhanced_dd_required = is_high_risk_jurisdiction or vendor_transaction.amount >= enhanced_dd_required_above_amount
+    screening = vendor_transaction.vendor_screening_record
+
+    if enhanced_dd_required and (screening is None or not screening.completed):
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.INSUFFICIENT_EVIDENCE,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                f"Jurisdiction due-diligence evaluation (country: {vendor_transaction.country_code}) requires "
+                "completed vendor screening, but none is on file."
+            ),
+            severity_score=0.65,
+            confidence_score=0.88,
+            recommended_action="Request completed vendor screening before spend proceeds.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.65,
+            triggered_signal_ids=["SIG-MISSING-VENDOR-SCREENING"],
+            signal_rationale=["Jurisdiction risk profile requires completed vendor screening on file."],
+            escalation_decision="queue_for_screening",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if screening is not None and screening.completed and screening.sanctions_check_passed is False:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.BLOCKED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Vendor failed sanctions/watchlist screening.",
+            severity_score=0.95,
+            confidence_score=0.95,
+            recommended_action="Block the transaction. Escalate to Legal and compliance manager immediately.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.CRITICAL,
+            risk_score=0.95,
+            triggered_signal_ids=["SIG-SANCTIONS-SCREENING-FAILED"],
+            signal_rationale=["Vendor did not clear sanctions/watchlist screening."],
+            escalation_decision="mandatory_review",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if enhanced_dd_required and screening is not None and not screening.enhanced_due_diligence_completed:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.HUMAN_REVIEW_REQUIRED,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                f"Vendor screening is on file but enhanced due diligence is not complete for jurisdiction "
+                f"{vendor_transaction.country_code}."
+            ),
+            severity_score=risk_score,
+            confidence_score=0.88,
+            recommended_action="Route to compliance manager for enhanced due-diligence sign-off (e.g. local counsel review) before spend proceeds.",
+            evidence_references=evidence_references,
+            risk_band=risk_band,
+            risk_score=risk_score,
+            triggered_signal_ids=["SIG-ENHANCED-DD-REQUIRED"],
+            signal_rationale=["High-risk jurisdiction or spend level requires enhanced due-diligence sign-off."],
+            escalation_decision="queue_for_enhanced_due_diligence",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    review_required = risk_band != RiskBand.LOW
+    if risk_band == RiskBand.CRITICAL:
+        action = "CRITICAL jurisdiction risk despite completed due diligence. Immediate compliance manager review required."
+    elif risk_band == RiskBand.HIGH:
+        action = "Route to compliance manager for review before spend is released."
+    elif risk_band == RiskBand.MEDIUM:
+        action = "Log for standard compliance review."
+    else:
+        action = "Approve and log. No further action required."
+
+    return DecisionRecord(
+        case_id=vendor_transaction.case_id,
+        transaction_id=vendor_transaction.transaction_id,
+        decision=DecisionState.APPROVED,
+        evaluated_at=evaluated_at,
+        reasoning_summary=f"Jurisdiction due-diligence evaluated with risk score {base_risk:.1f}/10.",
+        severity_score=risk_score,
+        confidence_score=0.88,
+        recommended_action=action,
+        evidence_references=evidence_references,
+        risk_band=risk_band,
+        risk_score=risk_score,
+        triggered_signal_ids=[],
+        signal_rationale=[],
+        escalation_decision="auto_close" if not review_required else "queue_for_review",
+        escalation_policy_version=VENDOR_ESCALATION_VERSION,
+        review_required=review_required,
+        review_status=ReviewStatus.PENDING if review_required else ReviewStatus.NOT_REQUIRED,
+        rule_metadata=rule,
+    )
+
+
 def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecord:
     """Evaluate a vendor transaction case against the applicable procurement rule."""
     rule = load_rule(vendor_transaction.control_id)
     evaluated_at = datetime.now(UTC).isoformat()
 
     if rule.control_domain == "procurement":
-        if "DUEDILIGENCE" in rule.control_id:
+        if "INTL" in rule.control_id:
+            return _evaluate_jurisdiction_due_diligence(vendor_transaction, rule, evaluated_at)
+        elif "DUEDILIGENCE" in rule.control_id:
             return _evaluate_vendor_due_diligence(vendor_transaction, rule, evaluated_at)
         elif "SPEND-APPROVAL" in rule.control_id:
             return _evaluate_spend_approval(vendor_transaction, rule, evaluated_at)
