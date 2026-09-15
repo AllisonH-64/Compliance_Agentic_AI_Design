@@ -1,152 +1,156 @@
 # Vendor Due-Diligence Gate
 
-This repository defines a practical framework for an Agentic AI system that gates vendor spend: purchase orders and vendor transactions are checked against spend-approval thresholds and vendor due-diligence screening requirements before they're allowed to proceed. The MVP detects missing or failed controls, routes ambiguous or high-risk cases to a human reviewer, and maintains an auditable record of every compliance decision and review outcome.
+A deterministic compliance engine that gates vendor spend: purchase orders and vendor transactions are checked against a versioned rule catalog before they're allowed to proceed. Every decision is explainable, cites the regulation or internal policy behind it, and leaves a permanent audit trail.
 
-## Current status
+See [docs/problem_statement.md](docs/problem_statement.md) for who this is for and why it exists.
 
-This repository contains the design foundation and a FastAPI MVP with eight procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail. The same application code also deploys to AWS unchanged (Lambda, API Gateway, DynamoDB, Cognito, S3, CloudWatch) via the CDK app in `infra/` — see `docs/aws_deployment.md`.
+## Features
 
-It also includes workspace customization for Copilot:
+- **8 compliance controls** covering spend approval, vendor due diligence, jurisdiction/sanctions risk, conflict of interest, expense receipts, worker classification, gifts & hospitality (anti-bribery), and vendor payment-change verification (see [Compliance controls](#compliance-controls) below)
+- **Deterministic risk scoring** — every transaction is evaluated against explicit, versioned thresholds, producing a risk band (low/medium/high/critical) and a decision (`approved`, `blocked`, `insufficient_evidence`, or `human_review_required`)
+- **Human-in-the-loop review** — high-risk or ambiguous cases route to a review queue with assignment, start/submit, and reopen workflows
+- **Policy traceability** — every control cites the regulation or internal policy it enforces
+- **Escalation routing** — each decision computes which stakeholder groups (Procurement/Legal/Finance) should be notified, from a versioned per-control policy
+- **Governance dashboard** — per-control decision breakdown, risk-signal frequency, and pending-notification counts in a single call
+- **Append-only audit trail** — every decision and review action is logged immutably
+- **Role-based access control** — four roles (`employee`, `compliance_analyst`, `compliance_manager`, `auditor`), enforced on every protected endpoint
+- **Deploys to AWS unchanged** — the same code runs on Lambda, API Gateway, DynamoDB, Cognito, and S3 via the CDK app in `infra/`
+- **Optional LLM triage agent** — a Claude-powered assistant that extracts structured fields from a plain-English transaction description and calls the same deterministic engine
 
-- `AGENTS.md` defines always-on repository guidance for the compliance workflow.
-- `.github/agents/compliance-agent.agent.md` adds a named `Compliance Agent` mode for this workspace.
+## Architecture
 
-## Contents
+A FastAPI service (`app/`) built around a deterministic rule engine (`app/engine.py`) that reads versioned JSON rule catalogs (`data/rules/`). Storage is backend-agnostic (`app/storage.py`) — SQLite locally, DynamoDB in AWS — selected by an environment variable, with no code changes required. See [docs/architecture.md](docs/architecture.md) for the full design.
 
-- `docs/problem_statement.md` - who has the problem, what it actually is, and why it matters
-- `docs/architecture.md` - end-to-end architecture and reference implementation design
-- `docs/mvp.md` - first MVP scope and build notes
-- `docs/aws_deployment.md` - the real AWS deployment layer: what's built, how auth works, how to deploy
-- `app/` - FastAPI service and deterministic evaluation engine
-- `infra/` - CDK (Python) app deploying the service to AWS
-- `lambda_handler.py` - Lambda entry point (Mangum-wrapped FastAPI app)
-- `data/rules/` - versioned rule catalogs for procurement controls
-- `examples/` - sample vendor-transaction payloads
-- `.github/agents/` - named Copilot agent definitions for this workspace
+## Getting started
 
-## Current MVP controls
+### Prerequisites
 
-- `PROC-SPEND-APPROVAL-001`: purchase-order spend at or above the approval threshold requires an on-file approval; spend at or above the dual-approval threshold requires two independent approvals
-- `PROC-VENDOR-DUEDILIGENCE-001`: new vendors, high-risk vendors, and spend at or above the screening threshold require completed vendor due-diligence screening, including a sanctions/watchlist check
-- `PROC-INTL-VENDOR-001`: vendors based in a designated high-risk jurisdiction (versioned country-code list in the rule catalog), or spend at or above the enhanced due-diligence threshold, require completed screening plus enhanced due-diligence sign-off (e.g. local counsel review)
-- `PROC-VENDOR-COI-001`: a flagged potential conflict of interest between the requestor and the vendor requires formal disclosure and an explicit compliance clearance decision; a cleared conflict still routes to mandatory review rather than auto-closing
-- `PROC-EXPENSE-RECEIPT-001`: expenses at or above the receipt threshold require an attached itemized receipt; a receipt total that doesn't reconcile with the claimed amount within tolerance routes to human review
-- `PROC-PART-TIME-CONTRACT-001`: vendor engagements structured as part-time contract or temporary staffing require a completed worker-classification risk assessment; an assessment suggesting the engagement functions as employment routes to human review rather than an outright block, since the fix is reclassification, not refusal — a confirmed-compliant engagement still routes to review given the elevated baseline risk of this engagement type
-- `PROC-GIFTS-HOSPITALITY-001`: gifts, hospitality, or entertainment given to or received from a vendor require pre-approval above a threshold; any amount involving a government official requires pre-approval regardless of size, reflecting the heightened bribery/corruption risk and criminal liability of public-official gifts
-- `PROC-VENDOR-PAYMENT-CHANGE-001`: a change to a vendor's payment/banking details requires independent verification (through a channel separate from the one that requested the change) before payment is released against the new details — guards against business-email-compromise-style payment redirection fraud; a verification determination that fails outright blocks the payment
-- severity-based escalation: transactions are classified into risk bands (LOW, MEDIUM, HIGH, CRITICAL) with corresponding escalation actions
-- escalation notifications: each control has a versioned, risk-band-driven policy (in its rule catalog) for which stakeholder groups (Procurement, Legal, Finance) to notify; a decision's `escalation_recipients` field is computed from that policy rather than hardcoded
-- policy traceability: every control's rule catalog carries a `policy_references` list citing the external regulation/standard it maps to (where one was confirmed) and/or the company's own internal policy — see "Regulatory sourcing" below
-- output: structured compliance decision record with severity scores, risk metadata, escalation recipients, and review state
+- Python 3.11+
 
-## Regulatory sourcing (Barbados/Caribbean, for now)
+### Install
 
-Each control's `data/rules/*.json` catalog carries a `policy_references` list, tagged `external_regulation` or `internal_policy`, so every rule evaluation maps back to something citable rather than an invented label. This was researched, not assumed — real sources found:
+```bash
+pip install -r requirements.txt
+```
 
-- **Barbados Public Procurement Act, 2021 (Act No. 30 of 2021)** and the **CARICOM Protocol on Procurement** — `PROC-SPEND-APPROVAL-001`, `PROC-INTL-VENDOR-001`
-- **Money Laundering and Financing of Terrorism (Prevention and Control) Act, 2011-23** and **CFATF** (Caribbean Financial Action Task Force) FATF-Recommendations compliance — `PROC-VENDOR-DUEDILIGENCE-001`, `PROC-INTL-VENDOR-001`
-- **Employment Rights Act, 2012 (Act 2012-9)** — `PROC-PART-TIME-CONTRACT-001`
-- **Prevention of Corruption Act, 2021 (Barbados)** — `PROC-GIFTS-HOSPITALITY-001`; covers bribery/gifts to both public officials and private-sector counterparties, with real criminal penalties (up to BBD$1,500,000 or 15 years on indictment) and corporate liability
-- **Computer Misuse Act, Chapter 124B**, the **National Payment System Act, 2021**, and the **Money Laundering and Financing of Terrorism (Prevention and Control) Act, 2011-23** — `PROC-VENDOR-PAYMENT-CHANGE-001`; the Computer Misuse Act specifically criminalizes computer-related fraud (up to $50,000 or 5 years on indictment), directly on-point for business-email-compromise-style payment redirection
+### Run locally
 
-Two honesty gaps, left as gaps rather than papered over: no confirmed, currently-enacted Barbados private-sector conflict-of-interest statute was found (the Integrity in Public Life Bill failed in the Senate in 2020 and was reintroduced in 2023, but I found no confirmation of Senate passage or entry into force, so it isn't cited), so `PROC-VENDOR-COI-001` is internal-policy-only; and no dedicated Barbados receipt-documentation statute was found, so `PROC-EXPENSE-RECEIPT-001` is internal-policy-only too. Neither of these should be read as "no regulation exists" — only that this pass didn't confirm one.
+```bash
+uvicorn app.main:app --reload
+```
 
-None of the researched sources gave a verified numeric threshold (a specific dollar approval amount, a specific part-time-hours cutoff), so every threshold in `escalation_triggers` remains an internal-policy value — nothing here should be read as a legally-mandated number.
-
-`app/engine.py`'s `validate_no_internal_policy_conflicts()` is the enforcement point for internal rules living alongside a regulation: a `PolicyReference` can declare `minimum_threshold_field`/`minimum_threshold_value` when a real regulatory floor is confirmed for one of a control's trigger keys, and `load_rules()` refuses to load any catalog whose internal trigger value is looser than that floor. It's currently a no-op against the shipped catalogs (no numeric floors have been confirmed yet) but is exercised directly in `tests/test_api.py` against a synthetic conflicting rule.
-
-## Run locally
-
-1. Create and activate a virtual environment.
-2. Install dependencies with `pip install -r requirements.txt`.
-3. Start the API with `uvicorn app.main:app --reload`.
-4. Open `http://127.0.0.1:8000/docs` for the interactive API docs.
+Open `http://127.0.0.1:8000/docs` for the interactive API docs.
 
 For quick manual testing without minting a JWT, run `python dev_server.py` instead — it sets `COMPLIANCE_ALLOW_INSECURE_HEADERS=true` so protected endpoints accept plain `X-User-Id`/`X-User-Role` headers.
 
+### Authentication
+
 Protected endpoints require bearer authentication:
 
-- `Authorization: Bearer <signed_token>`
-- required token claims: `sub` (caller identifier) and `role` (`employee`, `compliance_analyst`, `compliance_manager`, or `auditor`)
-- signing configuration: set `COMPLIANCE_AUTH_SECRET` (HS256) for single-key mode
-- key rotation mode: set `COMPLIANCE_AUTH_KEYS_JSON` to a JSON map of key IDs to secrets
-- optional trust constraints: set `COMPLIANCE_AUTH_ISSUER` and `COMPLIANCE_AUTH_AUDIENCE` to enforce issuer and audience claim validation
+| Variable | Purpose |
+|---|---|
+| `COMPLIANCE_AUTH_SECRET` | HS256 shared secret (single-key mode) |
+| `COMPLIANCE_AUTH_KEYS_JSON` | Key-ID → secret map, for key rotation |
+| `COMPLIANCE_AUTH_ISSUER` / `COMPLIANCE_AUTH_AUDIENCE` | Optional issuer/audience validation |
+| `COMPLIANCE_AUTH_JWKS_URL` | RS256/JWKS verification (used in AWS, against Cognito) |
+| `COMPLIANCE_ALLOW_INSECURE_HEADERS` | Accept plain `X-User-Id`/`X-User-Role` headers — local dev only |
 
-Temporary migration fallback:
+A token needs `sub` (caller ID) and `role` claims (or, for Cognito, a `cognito:groups` claim matching one of the four roles).
 
-- set `COMPLIANCE_ALLOW_INSECURE_HEADERS=true` to allow legacy `X-User-Id` and `X-User-Role` headers during transition
+### Run on AWS
 
-## Run on AWS
+The same application code deploys unchanged via the CDK app in `infra/`:
 
-The same app code deploys unchanged via the CDK app in `infra/` — Lambda (Lambdalith via Mangum) behind an HTTP API with a Cognito JWT authorizer, DynamoDB in place of SQLite (`COMPLIANCE_STORAGE_BACKEND=dynamodb`), an S3 audit export fed by DynamoDB Streams, and CloudWatch observability. Full details, the auth model, and the deploy sequence are in `docs/aws_deployment.md`.
+```bash
+cd infra
+pip install -r requirements.txt
+cdk bootstrap aws://<account-id>/<region>
+cdk deploy --all
+```
+
+See [docs/aws_deployment.md](docs/aws_deployment.md) for what gets built, the auth model, and full details.
+
+### Run tests
+
+```bash
+python -m pytest tests/test_api.py
+```
+
+## API reference
+
+| Endpoint | Description |
+|---|---|
+| `GET /health` | Liveness check |
+| `GET /rules` | List all rule catalogs |
+| `GET /rules/current` | Get the default control's rule |
+| `GET /rules/{control_id}` | Get a specific control's rule |
+| `POST /evaluate` | Submit a vendor transaction for evaluation |
+| `GET /decisions` | List all decisions |
+| `GET /decisions/{case_id}` | Get a decision by case ID |
+| `GET /reviews/queue` | Active review queue |
+| `GET /reviews/metrics` | Queue volume and aging metrics |
+| `GET /reviews/{case_id}` | Get a case's review record |
+| `POST /reviews/{case_id}/assign` | Assign a reviewer |
+| `POST /reviews/{case_id}/start` | Start a review |
+| `POST /reviews/{case_id}` | Submit a review outcome |
+| `POST /reviews/{case_id}/reopen` | Reopen a completed review |
+| `GET /reports/summary` | Governance summary report |
+| `GET /dashboard/summary` | Per-control and per-signal dashboard |
+| `POST /agent/triage` | Optional LLM triage agent (see below) |
+
+## Compliance controls
+
+| Control | What it checks |
+|---|---|
+| `PROC-SPEND-APPROVAL-001` | Spend-approval thresholds; dual approval above a higher threshold |
+| `PROC-VENDOR-DUEDILIGENCE-001` | Vendor due-diligence / sanctions screening for new or high-risk vendors |
+| `PROC-INTL-VENDOR-001` | Enhanced due diligence for vendors in high-risk jurisdictions |
+| `PROC-VENDOR-COI-001` | Conflict-of-interest disclosure and compliance clearance |
+| `PROC-EXPENSE-RECEIPT-001` | Itemized receipt documentation and amount reconciliation |
+| `PROC-PART-TIME-CONTRACT-001` | Worker-classification risk for part-time/temporary vendor engagements |
+| `PROC-GIFTS-HOSPITALITY-001` | Gifts/hospitality/entertainment pre-approval (anti-bribery) |
+| `PROC-VENDOR-PAYMENT-CHANGE-001` | Independent verification of vendor payment/banking detail changes |
+
+Every control's rule catalog (`data/rules/*.json`) carries a `policy_references` list citing the regulation or internal policy it enforces — see [docs/mvp.md](docs/mvp.md#regulatory-sourcing-and-the-internal-policy-layer-barbadoscaribbean-for-now) for the full citation list and how internal thresholds are checked against any confirmed regulatory floor.
 
 ## LLM triage agent (optional)
 
-`orchestrator.py`, `router.py`, and `tools.py` at the repo root add an optional Claude-powered triage agent: submit a raw, unstructured transaction description in plain English and get back the agent's structured triage. It never computes or states a risk band itself — every risk/decision claim comes from a real call to `POST /evaluate`, the same deterministic engine every other caller goes through; the model's only role is to extract structured fields, call the right tools, and explain the result in plain language.
+`orchestrator.py`, `router.py`, and `tools.py` add an optional Claude-powered triage agent at `POST /agent/triage`: submit a raw, plain-English transaction description and get back structured triage. It never computes or states risk itself — every decision comes from a real call to `POST /evaluate`.
 
-It's optional by design: `app/main.py` mounts it (at `POST /agent/triage`) only if `router.py` and the `anthropic` package are importable, so the core deployed app (including the AWS Lambda package, which doesn't include this scaffolding) works identically with or without it — see the `try/except ImportError` around the mount in `app/main.py`.
+```bash
+export ANTHROPIC_API_KEY=<your key>
+```
 
-To use it locally:
+It's fully optional: `app/main.py` mounts it only if `router.py` and the `anthropic` package are importable, so the core app — including the AWS Lambda deployment, which excludes this scaffolding — works identically without it.
 
-1. `pip install -r requirements.txt` (includes `anthropic`).
-2. `export ANTHROPIC_API_KEY=<your key>` (not provided by this repo — bring your own).
-3. Start the API (`python dev_server.py` or `uvicorn app.main:app --reload`).
-4. `POST /agent/triage` with `{"description": "..."}` and the same auth as every other protected endpoint (`X-User-Id`/`X-User-Role` with `dev_server.py`, or a real bearer token otherwise) — same role gate as `POST /evaluate`.
+## Project structure
 
-The agent authenticates its own calls back into the API (`tools.py`) as a service identity — `COMPLIANCE_AGENT_TOKEN` for a signed bearer token, or falling back to `COMPLIANCE_AGENT_USER_ID`/`COMPLIANCE_AGENT_ROLE` (default `compliance_manager`, since reviewer assignment is manager-only) when insecure headers are enabled. HIGH/CRITICAL-risk reviewer assignment is blocked pending human confirmation regardless of what the agent decides — `orchestrator.py`'s `_blocked_tool_call()` gate.
+```
+app/                                   FastAPI service, rule engine, models, storage, auth
+data/rules/                            Versioned rule catalogs (one JSON file per control)
+examples/                              Sample vendor-transaction payloads
+infra/                                 CDK app for AWS deployment
+tests/                                 API test suite
+docs/                                  Design docs
+orchestrator.py, router.py, tools.py   Optional LLM triage agent
+dev_server.py                          Local dev server with insecure-header auth
+lambda_handler.py                      AWS Lambda entry point
+AGENTS.md, .github/agents/             Copilot workspace agent configuration
+```
 
-## Example endpoints
+## Documentation
 
-- `GET /health`
-- `GET /rules`
-- `GET /rules/current`
-- `GET /rules/{control_id}`
-- `POST /evaluate` - submit a vendor transaction for compliance evaluation
-- `GET /decisions`
-- `GET /decisions/{case_id}`
-- `GET /reviews/queue` - active review cases requiring action
-- `GET /reviews/metrics` - queue volume and aging metrics by risk band
-- `GET /reports/summary` - governance summary of decisions, reviews, and risk-band distributions
-- `GET /dashboard/summary` - per-control decision breakdown, triggered-signal frequency, risk-band distribution, and the active review queue snapshot in a single response
-- `GET /reviews/{case_id}`
-- `POST /reviews/{case_id}/assign` - assign reviewer
-- `POST /reviews/{case_id}/start` - start review
-- `POST /reviews/{case_id}` - submit review outcome
-- `POST /reviews/{case_id}/reopen` - reopen case for additional review
-- `POST /agent/triage` - optional LLM triage agent; submit a raw transaction description and get back structured triage (see "LLM triage agent" above)
+- [docs/problem_statement.md](docs/problem_statement.md) — who has the problem and why
+- [docs/architecture.md](docs/architecture.md) — end-to-end design
+- [docs/mvp.md](docs/mvp.md) — MVP scope, components, and regulatory sourcing
+- [docs/aws_deployment.md](docs/aws_deployment.md) — AWS deployment details
+- [CHANGELOG.md](CHANGELOG.md) — build history and what's been verified along the way
 
-## Validated behavior
+## Roadmap
 
-- all eight procurement rule catalogs load through the API, each with populated `policy_references`
-- transaction risk is calculated based on spend amount, vendor risk level, new-vendor status, and prior flagged transactions
-- missing required approval or vendor screening evidence returns `insufficient_evidence` and queues the case for review
-- an explicit approval denial or failed sanctions/watchlist screening returns `blocked` at CRITICAL risk
-- spend at or above the dual-approval threshold with only one approval on file returns `human_review_required`
-- fully-evidenced transactions with elevated risk (e.g. a high-risk vendor) are `approved` but still routed to mandatory review
-- review-required cases enter the active queue and support assignment and workflow transitions
-- completed review cases can be reopened with explicit reopen reason tracking
-- review queue metrics aggregate active cases by severity band and track SLA aging
-- summary reporting includes severity-band distributions for governance oversight
-- the dashboard summary breaks decisions down per control (including controls with zero traffic) and surfaces the most frequently triggered risk signals
-- escalation recipients (Procurement, Legal, Finance) are computed per decision from each control's versioned, risk-band notification policy, and the dashboard aggregates pending notification counts by recipient group
-- a part-time/temporary contract vendor engagement without a completed worker-classification assessment returns `insufficient_evidence`; an assessment suggesting the engagement resembles employment returns `human_review_required` rather than a block; a standard vendor engagement skips this scrutiny entirely
-- a gift/hospitality/entertainment transaction below the approval threshold auto-closes; above it (or at any amount for a government-official counterparty) it requires an on-file approval, and an explicit denial returns `blocked` at CRITICAL risk
-- a transaction with no vendor payment/banking detail change skips scrutiny entirely; a changed-but-unverified detail returns `insufficient_evidence`; a failed verification returns `blocked` at CRITICAL risk; a verified change still routes to review given the inherent risk of any payment redirection
-- `validate_no_internal_policy_conflicts()` blocks catalog loading if an internal trigger value is ever looser than a declared regulatory floor
-- signed bearer token auth is enforced on protected endpoints with key-id support and optional legacy header fallback
-- role-based access controls protect sensitive transaction and review data
-- append-only decision and review history is preserved alongside current case state
-- `python -m pytest tests/test_api.py` (47 tests) passes unchanged against the SQLite backend regardless of the storage/auth work below — `COMPLIANCE_STORAGE_BACKEND` defaults to `sqlite` and is never set by the test suite
-- the DynamoDB storage backend (`app/storage_dynamodb.py`) and the Cognito RS256/JWKS auth path (`app/main.py`) were both exercised directly: a locally-signed RS256 token with a `cognito:groups` claim and no `role` claim was correctly authorized, and a token signed with the wrong key was correctly rejected with 401
-- `cdk synth --strict` on both `infra/` stacks succeeds — verified resource wiring: 4 DynamoDB tables, the S3 audit bucket, Cognito User Pool/Client/4 Groups, the API Lambda with least-privilege IAM (via `grant_read_write_data`, not hand-written policy JSON), the HTTP API's Cognito JWT authorizer, the audit-export Lambda's two DynamoDB Streams event sources, and 4 CloudWatch alarms
-- the whole app was run live locally and exercised through a browser/JS console against the real server: `/evaluate` correctly returned `insufficient_evidence`, `/reviews/queue` showed the pending case, `/reviews/{case_id}/assign` correctly assigned it, and `/dashboard/summary` correctly aggregated it — not just unit-tested in isolation
-- the LLM triage agent's tool functions (`tools.py`) were verified directly against the live server after the rewrite: `get_active_rules` correctly returns all 8 controls (the old code called a since-renamed single-rule endpoint), `get_open_reviews` correctly calls `/reviews/queue` (the old code called a `/investigations/queue` path that no longer exists), and `assign_reviewer` correctly sends `{"reviewer_id": ...}` (the old code sent a `{"investigator": ...}` key the API never accepted) — the actual Claude call itself needs an `ANTHROPIC_API_KEY` this environment doesn't have, so that part is unverified
-
-## Next steps
-
-- actually run `cdk deploy` against a real AWS account (deliberately not done here — see `docs/aws_deployment.md`'s scope note) and provision a first `compliance_manager` user
-- wire `escalation_recipients` to an actual outbound channel (email/Slack) once real distribution lists exist; today it's a computed, auditable field rather than a sent notification
-- confirm the status of the Integrity in Public Life Act and, if enacted, add it as `PROC-VENDOR-COI-001`'s external regulation reference
-- extend regulatory sourcing beyond Barbados/Caribbean to other jurisdictions as the vendor base grows
-- confirm real numeric regulatory floors (approval-dollar thresholds, part-time-hours definitions) where they exist, so `validate_no_internal_policy_conflicts()` has something concrete to enforce
-- decide whether the previous employee-conduct domain content (`docs/ethics_workflow.md` and related narrative docs) should be archived, ported to a separate deployment, or retired
+- Run `cdk deploy` against a real AWS account and provision a first `compliance_manager` user
+- Wire `escalation_recipients` to an actual outbound channel (email/Slack)
+- Confirm the status of the Integrity in Public Life Act for `PROC-VENDOR-COI-001`
+- Extend regulatory sourcing beyond Barbados/Caribbean as the vendor base grows
+- Confirm real numeric regulatory floors where they exist, for `validate_no_internal_policy_conflicts()` to enforce
+- Decide the fate of `docs/`'s older employee-conduct-domain narrative docs (`ethics_workflow.md` and similar) — retired along with that domain but never removed

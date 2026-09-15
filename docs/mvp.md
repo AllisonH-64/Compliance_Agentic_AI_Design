@@ -35,13 +35,21 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - a LOW-band decision always resolves to no recipients; a control with no configured policy for a band also resolves to no recipients rather than guessing
 - this is a computed, auditable routing field today, not a sent notification — see README "Next steps" for wiring it to an actual outbound channel
 
-## Regulatory Sourcing and the Internal-Policy Layer
+## Regulatory Sourcing and the Internal-Policy Layer (Barbados/Caribbean, for now)
 
-- `RuleMetadata.policy_references` (`app/models.py`) is a list of `PolicyReference` entries, each tagged `external_regulation` or `internal_policy`, with `citation`/`jurisdiction`/`source_url`/`notes`
-- researched Barbados/Caribbean sources are cited on six of eight controls (Barbados Public Procurement Act 2021, CARICOM Procurement Protocol, Barbados MLFTA 2011-23, CFATF, Barbados Employment Rights Act 2012, Barbados Prevention of Corruption Act 2021, Barbados Computer Misuse Act, Barbados National Payment System Act 2021 — see README "Regulatory sourcing" for the full list and citation-to-control mapping)
-- `PROC-VENDOR-COI-001` and `PROC-EXPENSE-RECEIPT-001` are internal-policy-only: no confirmed, currently-enacted external source was found for either, and that's stated directly in each rule file's `notes` rather than papered over with a placeholder citation
-- an `external_regulation` reference may declare `minimum_threshold_field`/`minimum_threshold_value` when a real, verified numeric floor exists for one of the rule's `escalation_triggers` keys; none of the researched sources gave a verified number, so no rule currently sets these
-- `validate_no_internal_policy_conflicts()` (`app/engine.py`) checks every loaded rule's trigger values against any such declared floor and `load_rules()` raises if an internal value is looser than the regulatory minimum — the "space to add internal rules... once it bears no conflict" is enforced structurally, not just documented, and is proven with a synthetic-conflict unit test since the shipped catalog has no real floors to trip it yet
+Each control's `data/rules/*.json` catalog carries a `policy_references` list (`RuleMetadata.policy_references` in `app/models.py`, a list of `PolicyReference` entries tagged `external_regulation` or `internal_policy`, each with `citation`/`jurisdiction`/`source_url`/`notes`), so every rule evaluation maps back to something citable rather than an invented label. These were researched, not assumed:
+
+- **Barbados Public Procurement Act, 2021 (Act No. 30 of 2021)** and the **CARICOM Protocol on Procurement** — `PROC-SPEND-APPROVAL-001`, `PROC-INTL-VENDOR-001`
+- **Money Laundering and Financing of Terrorism (Prevention and Control) Act, 2011-23** and **CFATF** (Caribbean Financial Action Task Force) FATF-Recommendations compliance — `PROC-VENDOR-DUEDILIGENCE-001`, `PROC-INTL-VENDOR-001`
+- **Employment Rights Act, 2012 (Act 2012-9)** — `PROC-PART-TIME-CONTRACT-001`
+- **Prevention of Corruption Act, 2021 (Barbados)** — `PROC-GIFTS-HOSPITALITY-001`; covers bribery/gifts to both public officials and private-sector counterparties, with real criminal penalties (up to BBD$1,500,000 or 15 years on indictment) and corporate liability
+- **Computer Misuse Act, Chapter 124B**, the **National Payment System Act, 2021**, and the MLFTA above — `PROC-VENDOR-PAYMENT-CHANGE-001`; the Computer Misuse Act specifically criminalizes computer-related fraud, directly on-point for business-email-compromise-style payment redirection
+
+Two honesty gaps, left as gaps rather than papered over: no confirmed, currently-enacted Barbados private-sector conflict-of-interest statute was found (the Integrity in Public Life Bill failed in the Senate in 2020 and was reintroduced in 2023, but Senate passage/entry into force wasn't confirmed, so it isn't cited), so `PROC-VENDOR-COI-001` is internal-policy-only; and no dedicated Barbados receipt-documentation statute was found, so `PROC-EXPENSE-RECEIPT-001` is internal-policy-only too.
+
+None of the researched sources gave a verified numeric threshold (a specific dollar approval amount, a specific part-time-hours cutoff), so every threshold in `escalation_triggers` remains an internal-policy value — nothing here should be read as a legally-mandated number. An `external_regulation` reference may declare `minimum_threshold_field`/`minimum_threshold_value` when a real, verified numeric floor exists for one of the rule's trigger keys; none currently do.
+
+`validate_no_internal_policy_conflicts()` (`app/engine.py`) checks every loaded rule's trigger values against any such declared floor, and `load_rules()` raises if an internal value is ever looser than the regulatory minimum — the "space to add internal rules... once it bears no conflict" is enforced structurally, not just documented, and is proven with a synthetic-conflict unit test since the shipped catalog has no real floors to trip it yet.
 
 ## Components
 
