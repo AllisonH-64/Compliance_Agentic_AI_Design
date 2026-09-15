@@ -48,10 +48,11 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - app/main.py exposes FastAPI endpoints for evaluation, review lifecycle, and reporting
 - app/engine.py loads rule catalogs and applies deterministic procurement evaluation logic
 - app/models.py defines vendor-transaction, decision, and review schemas
-- app/storage.py persists current records plus append-only decision and review history
+- app/storage.py is a thin backend dispatcher (`COMPLIANCE_STORAGE_BACKEND`, default `sqlite`) over app/storage_sqlite.py (local/dev/test) and app/storage_dynamodb.py (AWS); app/storage_common.py holds the deserialization logic both share
 - data/rules contains versioned control metadata for the eight procurement controls
 - examples contains vendor-transaction sample payloads for manual testing
-- tests/test_api.py contains API tests for auth, workflow, metrics, and summary behavior
+- tests/test_api.py contains API tests for auth, workflow, metrics, and summary behavior — always against the SQLite backend, since the suite never sets COMPLIANCE_STORAGE_BACKEND
+- infra/ is a CDK (Python) app deploying the same, unmodified application to AWS — see docs/aws_deployment.md
 
 ## Audit Trail and Traceability
 

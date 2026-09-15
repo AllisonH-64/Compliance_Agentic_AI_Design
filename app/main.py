@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import lru_cache
 import json
 import os
 from typing import Annotated
 
 import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, status
-from jwt import InvalidTokenError
+from jwt import InvalidTokenError, PyJWKClientError
 
 from app.engine import calculate_dashboard_summary, calculate_review_queue_metrics, evaluate_vendor_case, load_rule, load_rules
 from app.models import (
@@ -58,6 +59,7 @@ AUTH_SECRET_ENV_VAR = "COMPLIANCE_AUTH_SECRET"
 AUTH_KEYS_JSON_ENV_VAR = "COMPLIANCE_AUTH_KEYS_JSON"
 AUTH_ISSUER_ENV_VAR = "COMPLIANCE_AUTH_ISSUER"
 AUTH_AUDIENCE_ENV_VAR = "COMPLIANCE_AUTH_AUDIENCE"
+AUTH_JWKS_URL_ENV_VAR = "COMPLIANCE_AUTH_JWKS_URL"
 ALLOW_INSECURE_HEADERS_ENV_VAR = "COMPLIANCE_ALLOW_INSECURE_HEADERS"
 
 
@@ -140,10 +142,17 @@ def _select_auth_secret(token: str) -> str:
     return _get_auth_secret()
 
 
+@lru_cache(maxsize=1)
+def _get_jwks_client() -> jwt.PyJWKClient:
+    # Cached for the life of the process: Cognito's signing keys rotate rarely, and
+    # PyJWKClient does its own internal caching/refresh against the JWKS URL below.
+    return jwt.PyJWKClient(os.environ[AUTH_JWKS_URL_ENV_VAR])
+
+
 def _decode_token_claims(token: str) -> dict:
-    secret = _select_auth_secret(token)
     issuer = os.getenv(AUTH_ISSUER_ENV_VAR)
     audience = os.getenv(AUTH_AUDIENCE_ENV_VAR)
+    jwks_url = os.getenv(AUTH_JWKS_URL_ENV_VAR)
 
     decode_options = {
         "verify_signature": True,
@@ -154,6 +163,21 @@ def _decode_token_claims(token: str) -> dict:
     }
 
     try:
+        if jwks_url:
+            # Cognito (and OIDC IdPs generally) signs RS256 and never hands out a
+            # static secret, so this path fetches the matching public key from the
+            # issuer's JWKS instead of the HS256 shared-secret path below.
+            signing_key = _get_jwks_client().get_signing_key_from_jwt(token).key
+            return jwt.decode(
+                token,
+                signing_key,
+                algorithms=["RS256"],
+                issuer=issuer,
+                audience=audience,
+                options=decode_options,
+            )
+
+        secret = _select_auth_secret(token)
         return jwt.decode(
             token,
             secret,
@@ -162,7 +186,7 @@ def _decode_token_claims(token: str) -> dict:
             audience=audience,
             options=decode_options,
         )
-    except InvalidTokenError as error:
+    except (InvalidTokenError, PyJWKClientError) as error:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token") from error
 
 
@@ -195,6 +219,16 @@ def get_current_user(
 
         user_id = claims.get("sub")
         role_claim = claims.get("role")
+
+        if role_claim is None:
+            # Cognito Groups map 1:1 onto UserRole (see infra/data_stack.py) and are
+            # forwarded in the "cognito:groups" claim -- a list on ID tokens, but
+            # handle a comma-separated string too in case an access token is sent.
+            groups_claim = claims.get("cognito:groups")
+            if isinstance(groups_claim, list) and groups_claim:
+                role_claim = groups_claim[0]
+            elif isinstance(groups_claim, str) and groups_claim:
+                role_claim = groups_claim.split(",")[0].strip()
 
         if not isinstance(user_id, str) or not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing valid subject claim")

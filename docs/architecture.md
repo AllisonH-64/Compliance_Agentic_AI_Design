@@ -528,6 +528,8 @@ If implemented this way, the system can improve detection speed and consistency 
 
 ## 21. Reference Implementation Architecture
 
+> **Note:** Sections 21-22 are the original design sketch and stay here as general reference. The actual, built-and-synth-verified AWS deployment layer for this repo lives in `infra/` and is documented in `docs/aws_deployment.md` — it differs from the sketch below in specifics (Lambdalith rather than per-service micro-Lambdas, a single Lambda + HTTP API rather than the full multi-service topology, Cognito Groups for roles) because those were the right calls for this app's actual size, not because the sketch was wrong for a larger system.
+
 To make this a functioning agent, the system should be implemented as a small set of services with clear interfaces rather than one large application.
 
 ### Recommended Build Pattern

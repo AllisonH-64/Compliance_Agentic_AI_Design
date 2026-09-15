@@ -4,7 +4,7 @@ This repository defines a practical framework for an Agentic AI system that gate
 
 ## Current status
 
-This repository contains the design foundation and a FastAPI MVP with eight procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail.
+This repository contains the design foundation and a FastAPI MVP with eight procurement-focused compliance controls, severity-based risk escalation, review workflow support, queue metrics, role-based access control, append-only audit history, and a local SQLite audit trail. The same application code also deploys to AWS unchanged (Lambda, API Gateway, DynamoDB, Cognito, S3, CloudWatch) via the CDK app in `infra/` — see `docs/aws_deployment.md`.
 
 It also includes workspace customization for Copilot:
 
@@ -13,9 +13,13 @@ It also includes workspace customization for Copilot:
 
 ## Contents
 
+- `docs/problem_statement.md` - who has the problem, what it actually is, and why it matters
 - `docs/architecture.md` - end-to-end architecture and reference implementation design
 - `docs/mvp.md` - first MVP scope and build notes
+- `docs/aws_deployment.md` - the real AWS deployment layer: what's built, how auth works, how to deploy
 - `app/` - FastAPI service and deterministic evaluation engine
+- `infra/` - CDK (Python) app deploying the service to AWS
+- `lambda_handler.py` - Lambda entry point (Mangum-wrapped FastAPI app)
 - `data/rules/` - versioned rule catalogs for procurement controls
 - `examples/` - sample vendor-transaction payloads
 - `.github/agents/` - named Copilot agent definitions for this workspace
@@ -70,6 +74,10 @@ Temporary migration fallback:
 
 - set `COMPLIANCE_ALLOW_INSECURE_HEADERS=true` to allow legacy `X-User-Id` and `X-User-Role` headers during transition
 
+## Run on AWS
+
+The same app code deploys unchanged via the CDK app in `infra/` — Lambda (Lambdalith via Mangum) behind an HTTP API with a Cognito JWT authorizer, DynamoDB in place of SQLite (`COMPLIANCE_STORAGE_BACKEND=dynamodb`), an S3 audit export fed by DynamoDB Streams, and CloudWatch observability. Full details, the auth model, and the deploy sequence are in `docs/aws_deployment.md`.
+
 ## Example endpoints
 
 - `GET /health`
@@ -110,9 +118,13 @@ Temporary migration fallback:
 - signed bearer token auth is enforced on protected endpoints with key-id support and optional legacy header fallback
 - role-based access controls protect sensitive transaction and review data
 - append-only decision and review history is preserved alongside current case state
+- `python -m pytest tests/test_api.py` (47 tests) passes unchanged against the SQLite backend regardless of the storage/auth work below — `COMPLIANCE_STORAGE_BACKEND` defaults to `sqlite` and is never set by the test suite
+- the DynamoDB storage backend (`app/storage_dynamodb.py`) and the Cognito RS256/JWKS auth path (`app/main.py`) were both exercised directly: a locally-signed RS256 token with a `cognito:groups` claim and no `role` claim was correctly authorized, and a token signed with the wrong key was correctly rejected with 401
+- `cdk synth --strict` on both `infra/` stacks succeeds — verified resource wiring: 4 DynamoDB tables, the S3 audit bucket, Cognito User Pool/Client/4 Groups, the API Lambda with least-privilege IAM (via `grant_read_write_data`, not hand-written policy JSON), the HTTP API's Cognito JWT authorizer, the audit-export Lambda's two DynamoDB Streams event sources, and 4 CloudWatch alarms
 
 ## Next steps
 
+- actually run `cdk deploy` against a real AWS account (deliberately not done here — see `docs/aws_deployment.md`'s scope note) and provision a first `compliance_manager` user
 - wire `escalation_recipients` to an actual outbound channel (email/Slack) once real distribution lists exist; today it's a computed, auditable field rather than a sent notification
 - confirm the status of the Integrity in Public Life Act and, if enacted, add it as `PROC-VENDOR-COI-001`'s external regulation reference
 - extend regulatory sourcing beyond Barbados/Caribbean to other jurisdictions as the vendor base grows

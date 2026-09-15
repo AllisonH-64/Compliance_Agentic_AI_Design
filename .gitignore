@@ -13,3 +13,6 @@ build/
 .DS_Store
 Thumbs.db
 .vscode/
+infra/cdk.out/
+infra/build/
+infra/.venv/
