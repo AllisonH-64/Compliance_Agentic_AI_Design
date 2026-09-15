@@ -8,6 +8,7 @@ from app.models import (
     DashboardSummary,
     DecisionRecord,
     DecisionState,
+    GiftRecipientType,
     MarketRiskLevel,
     NotificationRecipient,
     PolicyReferenceType,
@@ -826,6 +827,150 @@ def _evaluate_expense_receipt(
     )
 
 
+def _evaluate_gifts_and_hospitality(
+    vendor_transaction: VendorTransaction,
+    rule: RuleMetadata,
+    evaluated_at: str,
+) -> DecisionRecord:
+    """Evaluate gifts, hospitality, or entertainment given to or received from a
+    vendor against pre-approval requirements, with a stricter (zero-amount) threshold
+    when the counterparty is a government official."""
+    evidence_references = _build_base_evidence_references(vendor_transaction)
+    evidence_references.append(f"gift_recipient_type:{vendor_transaction.gift_recipient_type.value}")
+
+    escalation_triggers = rule.escalation_triggers or {}
+    standard_approval_threshold = escalation_triggers.get("standard_approval_threshold", 150)
+    government_official_approval_threshold = escalation_triggers.get("government_official_approval_threshold", 0)
+    risk_medium = escalation_triggers.get("risk_score_medium", 4)
+    risk_high = escalation_triggers.get("risk_score_high", 6)
+    risk_critical = escalation_triggers.get("risk_score_critical", 8)
+
+    is_government_official = vendor_transaction.gift_recipient_type == GiftRecipientType.GOVERNMENT_OFFICIAL
+
+    base_risk = 2.0
+
+    if is_government_official:
+        base_risk += 4.0
+
+    if vendor_transaction.amount >= standard_approval_threshold:
+        base_risk += 1.5
+
+    if vendor_transaction.prior_flagged_transactions_12m >= 1:
+        base_risk += 1.0
+
+    base_risk = min(base_risk, 10.0)
+    risk_score = base_risk / 10.0
+    risk_band = _risk_band_for_score(base_risk, risk_medium, risk_high, risk_critical)
+
+    requires_approval = (
+        vendor_transaction.amount >= standard_approval_threshold
+        or (is_government_official and vendor_transaction.amount >= government_official_approval_threshold)
+    )
+
+    if requires_approval and vendor_transaction.approval_record is None:
+        if is_government_official:
+            return DecisionRecord(
+                case_id=vendor_transaction.case_id,
+                transaction_id=vendor_transaction.transaction_id,
+                decision=DecisionState.INSUFFICIENT_EVIDENCE,
+                evaluated_at=evaluated_at,
+                reasoning_summary=(
+                    "Gift, hospitality, or entertainment involving a government official requires "
+                    "pre-approval regardless of amount, but no approval record is on file."
+                ),
+                severity_score=0.85,
+                confidence_score=0.9,
+                recommended_action="Request compliance manager pre-approval before this gift/hospitality proceeds.",
+                evidence_references=evidence_references,
+                risk_band=RiskBand.CRITICAL,
+                risk_score=0.85,
+                triggered_signal_ids=["SIG-MISSING-GOV-OFFICIAL-GIFT-APPROVAL"],
+                signal_rationale=["Gifts/hospitality involving a government official require pre-approval at any amount."],
+                escalation_decision="queue_for_approval",
+                escalation_policy_version=VENDOR_ESCALATION_VERSION,
+                review_required=True,
+                review_status=ReviewStatus.PENDING,
+                rule_metadata=rule,
+            )
+
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.INSUFFICIENT_EVIDENCE,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                f"Gift/hospitality amount {vendor_transaction.amount} meets the approval threshold "
+                f"({standard_approval_threshold}) but no approval record is on file."
+            ),
+            severity_score=0.6,
+            confidence_score=0.88,
+            recommended_action="Request pre-approval before this gift/hospitality proceeds.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.6,
+            triggered_signal_ids=["SIG-MISSING-GIFT-APPROVAL"],
+            signal_rationale=["Gift/hospitality spend at or above the approval threshold requires an on-file approval record."],
+            escalation_decision="queue_for_approval",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if vendor_transaction.approval_record is not None and vendor_transaction.approval_record.approved is False:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.BLOCKED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Approval record on file explicitly denies this gift/hospitality/entertainment spend.",
+            severity_score=0.9,
+            confidence_score=0.95,
+            recommended_action="Block the transaction. Escalate to Legal for anti-corruption review.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.CRITICAL,
+            risk_score=0.9,
+            triggered_signal_ids=["SIG-GIFT-APPROVAL-DENIED"],
+            signal_rationale=["The recorded approver denied this gift/hospitality/entertainment spend."],
+            escalation_decision="mandatory_review",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    review_required = risk_band != RiskBand.LOW
+    if risk_band == RiskBand.CRITICAL:
+        action = "CRITICAL risk despite approval. Immediate Legal review required."
+    elif risk_band == RiskBand.HIGH:
+        action = "Route to compliance analyst for review."
+    elif risk_band == RiskBand.MEDIUM:
+        action = "Log for standard compliance review."
+    else:
+        action = "Approve and log. No further action required."
+
+    return DecisionRecord(
+        case_id=vendor_transaction.case_id,
+        transaction_id=vendor_transaction.transaction_id,
+        decision=DecisionState.APPROVED,
+        evaluated_at=evaluated_at,
+        reasoning_summary=f"Gifts/hospitality evaluation completed with risk score {base_risk:.1f}/10.",
+        severity_score=risk_score,
+        confidence_score=0.88,
+        recommended_action=action,
+        evidence_references=evidence_references,
+        risk_band=risk_band,
+        risk_score=risk_score,
+        triggered_signal_ids=[],
+        signal_rationale=[],
+        escalation_decision="auto_close" if not review_required else "queue_for_review",
+        escalation_policy_version=VENDOR_ESCALATION_VERSION,
+        review_required=review_required,
+        review_status=ReviewStatus.PENDING if review_required else ReviewStatus.NOT_REQUIRED,
+        rule_metadata=rule,
+    )
+
+
 def _evaluate_part_time_contract_classification(
     vendor_transaction: VendorTransaction,
     rule: RuleMetadata,
@@ -1010,7 +1155,9 @@ def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecor
     evaluated_at = datetime.now(UTC).isoformat()
 
     if rule.control_domain == "procurement":
-        if "PART-TIME" in rule.control_id:
+        if "GIFTS-HOSPITALITY" in rule.control_id:
+            decision_record = _evaluate_gifts_and_hospitality(vendor_transaction, rule, evaluated_at)
+        elif "PART-TIME" in rule.control_id:
             decision_record = _evaluate_part_time_contract_classification(vendor_transaction, rule, evaluated_at)
         elif "RECEIPT" in rule.control_id:
             decision_record = _evaluate_expense_receipt(vendor_transaction, rule, evaluated_at)

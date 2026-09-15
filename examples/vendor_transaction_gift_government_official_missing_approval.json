@@ -1,0 +1,12 @@
+{
+  "case_id": "CASE-2025",
+  "transaction_id": "PO-5025",
+  "control_id": "PROC-GIFTS-HOSPITALITY-001",
+  "vendor_name": "Harbourview Restaurant",
+  "requestor_role": "regulatory_affairs_manager",
+  "amount": 40,
+  "currency": "USD",
+  "business_justification": "Courtesy lunch with a customs official during a permit review.",
+  "gift_recipient_type": "government_official",
+  "prior_flagged_transactions_12m": 0
+}

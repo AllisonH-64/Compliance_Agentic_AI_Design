@@ -1,0 +1,43 @@
+{
+  "control_id": "PROC-GIFTS-HOSPITALITY-001",
+  "control_domain": "procurement",
+  "policy_name": "Vendor Gifts, Hospitality, and Entertainment Policy",
+  "policy_version": "2026-09-01",
+  "description": "Gifts, hospitality, or entertainment given to or received from a vendor require pre-approval before the spend is incurred. Any gift, hospitality, or entertainment involving a government official requires pre-approval regardless of amount, reflecting the elevated bribery risk and criminal liability attached to public-official corruption.",
+  "severity_threshold": 3,
+  "required_evidence": [
+    "approval_record"
+  ],
+  "required_reviewer_role": "compliance_manager",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "standard_approval_threshold": 150,
+    "government_official_approval_threshold": 0,
+    "risk_score_medium": 4,
+    "risk_score_high": 6,
+    "risk_score_critical": 8,
+    "notification_recipients": {
+      "low": [],
+      "medium": ["procurement"],
+      "high": ["procurement", "legal"],
+      "critical": ["procurement", "legal", "finance"]
+    }
+  },
+  "policy_references": [
+    {
+      "source_type": "external_regulation",
+      "citation": "Prevention of Corruption Act, 2021 (Barbados)",
+      "jurisdiction": "Barbados",
+      "source_url": "https://www.barbadosparliament.com/bills/details/580",
+      "notes": "Repealed the Prevention of Corruption Act, Cap. 144 and the Prevention of Corruption Act, 2012-31. Prohibits offering, promising, or granting a gift, money, or other advantage to a government official in connection with the performance of official duties, and extends corporate liability to companies and their directors/officers. Per a Lex Mundi anti-corruption compliance guide summary, its scope covers both public officials and private-sector counterparties. Penalties run up to BBD$1,500,000 or 15 years imprisonment on indictment. Does not specify a numeric gift-value threshold, so standard_approval_threshold and government_official_approval_threshold remain internal-policy values."
+    },
+    {
+      "source_type": "internal_policy",
+      "citation": "Internal Gifts, Hospitality, and Entertainment Standard",
+      "jurisdiction": "Company-wide",
+      "notes": "Sets standard_approval_threshold (150) and government_official_approval_threshold (0, i.e. any amount requires pre-approval when the counterparty is a government official)."
+    }
+  ]
+}

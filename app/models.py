@@ -65,6 +65,11 @@ class VendorEngagementType(str, Enum):
     TEMPORARY_STAFFING = "temporary_staffing"
 
 
+class GiftRecipientType(str, Enum):
+    COMMERCIAL_CONTACT = "commercial_contact"
+    GOVERNMENT_OFFICIAL = "government_official"
+
+
 class ReopenReason(str, Enum):
     NEW_EVIDENCE = "new_evidence"
     POLICY_UPDATE = "policy_update"
@@ -195,6 +200,10 @@ class VendorTransaction(BaseModel):
     misclassification_assessment_record: MisclassificationAssessmentRecord | None = Field(
         default=None,
         description="Worker-classification risk assessment evidence for part-time/temporary contract engagements",
+    )
+    gift_recipient_type: GiftRecipientType = Field(
+        default=GiftRecipientType.COMMERCIAL_CONTACT,
+        description="Nature of the counterparty for a gift/hospitality/entertainment transaction; government officials require stricter pre-approval",
     )
     prior_flagged_transactions_12m: int = Field(
         default=0,

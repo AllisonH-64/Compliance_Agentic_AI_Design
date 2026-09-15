@@ -1,0 +1,12 @@
+{
+  "case_id": "CASE-2023",
+  "transaction_id": "PO-5023",
+  "control_id": "PROC-GIFTS-HOSPITALITY-001",
+  "vendor_name": "Downtown Cafe",
+  "requestor_role": "account_executive",
+  "amount": 60,
+  "currency": "USD",
+  "business_justification": "Client working lunch with a commercial contact.",
+  "gift_recipient_type": "commercial_contact",
+  "prior_flagged_transactions_12m": 0
+}

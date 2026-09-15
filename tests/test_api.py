@@ -429,7 +429,7 @@ def test_dashboard_summary_aggregates_by_control_and_signal(tmp_path: Path) -> N
     assert payload["total_insufficient_evidence"] == 2
 
     controls_by_id = {control["control_id"]: control for control in payload["controls"]}
-    # All six known controls should appear even if some had zero traffic.
+    # All seven known controls should appear even if some had zero traffic.
     assert set(controls_by_id) == {
         "PROC-SPEND-APPROVAL-001",
         "PROC-VENDOR-DUEDILIGENCE-001",
@@ -437,6 +437,7 @@ def test_dashboard_summary_aggregates_by_control_and_signal(tmp_path: Path) -> N
         "PROC-VENDOR-COI-001",
         "PROC-EXPENSE-RECEIPT-001",
         "PROC-PART-TIME-CONTRACT-001",
+        "PROC-GIFTS-HOSPITALITY-001",
     }
 
     spend_approval = controls_by_id["PROC-SPEND-APPROVAL-001"]
@@ -1301,6 +1302,114 @@ def test_validate_no_internal_policy_conflicts_passes_when_stricter_or_equal() -
     )
 
     assert validate_no_internal_policy_conflicts(rule) == []
+
+
+def test_gift_below_threshold_auto_closes(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "gift-compliant.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-gift-compliant-1",
+            "transaction_id": "po-gift-compliant-1",
+            "control_id": "PROC-GIFTS-HOSPITALITY-001",
+            "vendor_name": "Downtown Cafe",
+            "requestor_role": "account_executive",
+            "amount": 60,
+            "currency": "USD",
+            "business_justification": "Client working lunch with a commercial contact.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is False
+    assert payload["risk_band"] == "low"
+    assert payload["escalation_decision"] == "auto_close"
+
+
+def test_gift_missing_approval_requires_evidence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "gift-missing-approval.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-gift-missing-approval-1",
+            "transaction_id": "po-gift-missing-approval-1",
+            "control_id": "PROC-GIFTS-HOSPITALITY-001",
+            "vendor_name": "Harbourview Restaurant",
+            "requestor_role": "sales_manager",
+            "amount": 220,
+            "currency": "USD",
+            "business_justification": "Client dinner during a vendor site visit.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["risk_band"] == "high"
+    assert "SIG-MISSING-GIFT-APPROVAL" in payload["triggered_signal_ids"]
+
+
+def test_gift_to_government_official_requires_approval_at_any_amount(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "gift-gov-official.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-gift-gov-official-1",
+            "transaction_id": "po-gift-gov-official-1",
+            "control_id": "PROC-GIFTS-HOSPITALITY-001",
+            "vendor_name": "Harbourview Restaurant",
+            "requestor_role": "regulatory_affairs_manager",
+            "amount": 40,
+            "currency": "USD",
+            "business_justification": "Courtesy lunch with a customs official during a permit review.",
+            "gift_recipient_type": "government_official",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["risk_band"] == "critical"
+    assert "SIG-MISSING-GOV-OFFICIAL-GIFT-APPROVAL" in payload["triggered_signal_ids"]
+    assert set(payload["escalation_recipients"]) == {"procurement", "legal", "finance"}
+
+
+def test_gift_approval_denied_blocks_transaction(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "gift-denied.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-gift-denied-1",
+            "transaction_id": "po-gift-denied-1",
+            "control_id": "PROC-GIFTS-HOSPITALITY-001",
+            "vendor_name": "Harbourview Restaurant",
+            "requestor_role": "sales_manager",
+            "amount": 220,
+            "currency": "USD",
+            "business_justification": "Client dinner during a vendor site visit.",
+            "approval_record": {"approver_role": "compliance_manager", "approved": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "blocked"
+    assert payload["risk_band"] == "critical"
+    assert "SIG-GIFT-APPROVAL-DENIED" in payload["triggered_signal_ids"]
 
 
 def test_review_metrics_counts_sla_breach_for_aged_case(tmp_path: Path) -> None:

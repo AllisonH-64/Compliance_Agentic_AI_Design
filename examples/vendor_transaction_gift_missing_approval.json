@@ -1,0 +1,12 @@
+{
+  "case_id": "CASE-2024",
+  "transaction_id": "PO-5024",
+  "control_id": "PROC-GIFTS-HOSPITALITY-001",
+  "vendor_name": "Harbourview Restaurant",
+  "requestor_role": "sales_manager",
+  "amount": 220,
+  "currency": "USD",
+  "business_justification": "Client dinner during a vendor site visit.",
+  "gift_recipient_type": "commercial_contact",
+  "prior_flagged_transactions_12m": 0
+}

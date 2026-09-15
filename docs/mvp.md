@@ -18,6 +18,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - PROC-VENDOR-COI-001: conflict-of-interest disclosure and compliance clearance requirements when a potential conflict between requestor and vendor is flagged
 - PROC-EXPENSE-RECEIPT-001: itemized receipt documentation and amount-reconciliation requirements for expenses at or above the receipt threshold
 - PROC-PART-TIME-CONTRACT-001: worker-classification risk assessment requirements for vendor engagements structured as part-time contract or temporary staffing arrangements
+- PROC-GIFTS-HOSPITALITY-001: pre-approval requirements for gifts, hospitality, or entertainment given to or received from a vendor, with a zero-amount threshold when the counterparty is a government official
 
 ## Decision Outcomes
 
@@ -29,14 +30,14 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 ## Escalation Notifications
 
 - each control's rule catalog carries a `notification_recipients` policy under `escalation_triggers`, mapping risk band to stakeholder groups (`procurement`, `legal`, `finance`)
-- `evaluate_vendor_case` computes `escalation_recipients` on every `DecisionRecord` from that policy after the deterministic evaluator runs, so it's uniform across all six evaluators rather than duplicated per control
+- `evaluate_vendor_case` computes `escalation_recipients` on every `DecisionRecord` from that policy after the deterministic evaluator runs, so it's uniform across all seven evaluators rather than duplicated per control
 - a LOW-band decision always resolves to no recipients; a control with no configured policy for a band also resolves to no recipients rather than guessing
 - this is a computed, auditable routing field today, not a sent notification — see README "Next steps" for wiring it to an actual outbound channel
 
 ## Regulatory Sourcing and the Internal-Policy Layer
 
 - `RuleMetadata.policy_references` (`app/models.py`) is a list of `PolicyReference` entries, each tagged `external_regulation` or `internal_policy`, with `citation`/`jurisdiction`/`source_url`/`notes`
-- researched Barbados/Caribbean sources are cited on four of six controls (Barbados Public Procurement Act 2021, CARICOM Procurement Protocol, Barbados MLFTA 2011-23, CFATF, Barbados Employment Rights Act 2012 — see README "Regulatory sourcing" for the full list and citation-to-control mapping)
+- researched Barbados/Caribbean sources are cited on five of seven controls (Barbados Public Procurement Act 2021, CARICOM Procurement Protocol, Barbados MLFTA 2011-23, CFATF, Barbados Employment Rights Act 2012, Barbados Prevention of Corruption Act 2021 — see README "Regulatory sourcing" for the full list and citation-to-control mapping)
 - `PROC-VENDOR-COI-001` and `PROC-EXPENSE-RECEIPT-001` are internal-policy-only: no confirmed, currently-enacted external source was found for either, and that's stated directly in each rule file's `notes` rather than papered over with a placeholder citation
 - an `external_regulation` reference may declare `minimum_threshold_field`/`minimum_threshold_value` when a real, verified numeric floor exists for one of the rule's `escalation_triggers` keys; none of the researched sources gave a verified number, so no rule currently sets these
 - `validate_no_internal_policy_conflicts()` (`app/engine.py`) checks every loaded rule's trigger values against any such declared floor and `load_rules()` raises if an internal value is looser than the regulatory minimum — the "space to add internal rules... once it bears no conflict" is enforced structurally, not just documented, and is proven with a synthetic-conflict unit test since the shipped catalog has no real floors to trip it yet
@@ -47,7 +48,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - app/engine.py loads rule catalogs and applies deterministic procurement evaluation logic
 - app/models.py defines vendor-transaction, decision, and review schemas
 - app/storage.py persists current records plus append-only decision and review history
-- data/rules contains versioned control metadata for the six procurement controls
+- data/rules contains versioned control metadata for the seven procurement controls
 - examples contains vendor-transaction sample payloads for manual testing
 - tests/test_api.py contains API tests for auth, workflow, metrics, and summary behavior
 
@@ -81,7 +82,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 
 ## Current Validation Status
 
-- verified: all six procurement rule catalogs load via API endpoints, each with populated `policy_references`
+- verified: all seven procurement rule catalogs load via API endpoints, each with populated `policy_references`
 - verified: deterministic transaction evaluation returns structured decision records
 - verified: assignment, start, submit, and reopen lifecycle transitions persist correctly
 - verified: append-only history captures decision and review lifecycle events
@@ -92,6 +93,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - verified: bearer auth, issuer/audience checks, and key-id trust behavior are covered by tests
 - verified: `/reports/summary` and `/reviews/{case_id}/reopen` — previously broken by a field-name mismatch and a missing enum member from the prior domain — now work and are covered by tests
 - verified: part-time/temporary contract engagements without a completed classification assessment return insufficient_evidence; a possible-misclassification finding returns human_review_required; a confirmed-contractor finding still routes to review; a standard vendor engagement skips the scrutiny entirely
+- verified: gifts/hospitality below the approval threshold auto-close; above it (or at any amount for a government official) require an on-file approval; an explicit denial returns blocked at CRITICAL risk
 - verified: `validate_no_internal_policy_conflicts()` catches a synthetic looser-than-regulatory-floor trigger and passes a stricter/equal one
 
 ## Immediate Next Build Step
