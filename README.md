@@ -80,6 +80,21 @@ Temporary migration fallback:
 
 The same app code deploys unchanged via the CDK app in `infra/` — Lambda (Lambdalith via Mangum) behind an HTTP API with a Cognito JWT authorizer, DynamoDB in place of SQLite (`COMPLIANCE_STORAGE_BACKEND=dynamodb`), an S3 audit export fed by DynamoDB Streams, and CloudWatch observability. Full details, the auth model, and the deploy sequence are in `docs/aws_deployment.md`.
 
+## LLM triage agent (optional)
+
+`orchestrator.py`, `router.py`, and `tools.py` at the repo root add an optional Claude-powered triage agent: submit a raw, unstructured transaction description in plain English and get back the agent's structured triage. It never computes or states a risk band itself — every risk/decision claim comes from a real call to `POST /evaluate`, the same deterministic engine every other caller goes through; the model's only role is to extract structured fields, call the right tools, and explain the result in plain language.
+
+It's optional by design: `app/main.py` mounts it (at `POST /agent/triage`) only if `router.py` and the `anthropic` package are importable, so the core deployed app (including the AWS Lambda package, which doesn't include this scaffolding) works identically with or without it — see the `try/except ImportError` around the mount in `app/main.py`.
+
+To use it locally:
+
+1. `pip install -r requirements.txt` (includes `anthropic`).
+2. `export ANTHROPIC_API_KEY=<your key>` (not provided by this repo — bring your own).
+3. Start the API (`python dev_server.py` or `uvicorn app.main:app --reload`).
+4. `POST /agent/triage` with `{"description": "..."}` and the same auth as every other protected endpoint (`X-User-Id`/`X-User-Role` with `dev_server.py`, or a real bearer token otherwise) — same role gate as `POST /evaluate`.
+
+The agent authenticates its own calls back into the API (`tools.py`) as a service identity — `COMPLIANCE_AGENT_TOKEN` for a signed bearer token, or falling back to `COMPLIANCE_AGENT_USER_ID`/`COMPLIANCE_AGENT_ROLE` (default `compliance_manager`, since reviewer assignment is manager-only) when insecure headers are enabled. HIGH/CRITICAL-risk reviewer assignment is blocked pending human confirmation regardless of what the agent decides — `orchestrator.py`'s `_blocked_tool_call()` gate.
+
 ## Example endpoints
 
 - `GET /health`
@@ -98,6 +113,7 @@ The same app code deploys unchanged via the CDK app in `infra/` — Lambda (Lamb
 - `POST /reviews/{case_id}/start` - start review
 - `POST /reviews/{case_id}` - submit review outcome
 - `POST /reviews/{case_id}/reopen` - reopen case for additional review
+- `POST /agent/triage` - optional LLM triage agent; submit a raw transaction description and get back structured triage (see "LLM triage agent" above)
 
 ## Validated behavior
 
@@ -123,6 +139,8 @@ The same app code deploys unchanged via the CDK app in `infra/` — Lambda (Lamb
 - `python -m pytest tests/test_api.py` (47 tests) passes unchanged against the SQLite backend regardless of the storage/auth work below — `COMPLIANCE_STORAGE_BACKEND` defaults to `sqlite` and is never set by the test suite
 - the DynamoDB storage backend (`app/storage_dynamodb.py`) and the Cognito RS256/JWKS auth path (`app/main.py`) were both exercised directly: a locally-signed RS256 token with a `cognito:groups` claim and no `role` claim was correctly authorized, and a token signed with the wrong key was correctly rejected with 401
 - `cdk synth --strict` on both `infra/` stacks succeeds — verified resource wiring: 4 DynamoDB tables, the S3 audit bucket, Cognito User Pool/Client/4 Groups, the API Lambda with least-privilege IAM (via `grant_read_write_data`, not hand-written policy JSON), the HTTP API's Cognito JWT authorizer, the audit-export Lambda's two DynamoDB Streams event sources, and 4 CloudWatch alarms
+- the whole app was run live locally and exercised through a browser/JS console against the real server: `/evaluate` correctly returned `insufficient_evidence`, `/reviews/queue` showed the pending case, `/reviews/{case_id}/assign` correctly assigned it, and `/dashboard/summary` correctly aggregated it — not just unit-tested in isolation
+- the LLM triage agent's tool functions (`tools.py`) were verified directly against the live server after the rewrite: `get_active_rules` correctly returns all 8 controls (the old code called a since-renamed single-rule endpoint), `get_open_reviews` correctly calls `/reviews/queue` (the old code called a `/investigations/queue` path that no longer exists), and `assign_reviewer` correctly sends `{"reviewer_id": ...}` (the old code sent a `{"investigator": ...}` key the API never accepted) — the actual Claude call itself needs an `ANTHROPIC_API_KEY` this environment doesn't have, so that part is unverified
 
 ## Next steps
 

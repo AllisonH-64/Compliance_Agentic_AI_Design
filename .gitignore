@@ -16,3 +16,4 @@ Thumbs.db
 infra/cdk.out/
 infra/build/
 infra/.venv/
+agent_decision_log.jsonl

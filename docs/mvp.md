@@ -45,9 +45,11 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 
 ## Components
 
-- app/main.py exposes FastAPI endpoints for evaluation, review lifecycle, and reporting
+- app/main.py exposes FastAPI endpoints for evaluation, review lifecycle, and reporting; also best-effort mounts the optional LLM triage agent's router (see below) if it and `anthropic` are importable
+- app/auth.py holds bearer-token verification and RBAC (`require_roles`), split out of app/main.py so router.py (repo root) can reuse it without a circular import
 - app/engine.py loads rule catalogs and applies deterministic procurement evaluation logic
 - app/models.py defines vendor-transaction, decision, and review schemas
+- orchestrator.py/router.py/tools.py (repo root, optional) — a Claude-powered triage agent over the same API, gated behind the `anthropic` package and `ANTHROPIC_API_KEY`; never computes risk itself, only calls the real `/evaluate`. Not part of the AWS Lambda package. See README "LLM triage agent"
 - app/storage.py is a thin backend dispatcher (`COMPLIANCE_STORAGE_BACKEND`, default `sqlite`) over app/storage_sqlite.py (local/dev/test) and app/storage_dynamodb.py (AWS); app/storage_common.py holds the deserialization logic both share
 - data/rules contains versioned control metadata for the eight procurement controls
 - examples contains vendor-transaction sample payloads for manual testing

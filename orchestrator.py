@@ -1,19 +1,18 @@
 """
-Orchestrator for the Employee Conduct Compliance Agent.
+Orchestrator for the Vendor Due-Diligence Gate's LLM triage agent.
 
 Responsibilities:
-  1. Runs a Claude tool-use loop over an incoming incident report.
-  2. Never lets the model compute or override severity — that stays
-     entirely inside evaluate_incident() / the deterministic engine.
-  3. Blocks autonomous HIGH/CRITICAL actions pending human confirmation.
-  4. Writes every tool call + the model's rationale to an append-only
-     agent decision log, separate from (but linked to) your existing
-     compliance decision/audit tables.
+  1. Runs a Claude tool-use loop over an incoming raw transaction description.
+  2. Never lets the model compute or override risk -- that stays entirely inside
+     evaluate_transaction() / the deterministic engine (app/engine.py).
+  3. Blocks autonomous HIGH/CRITICAL reviewer assignment pending human confirmation.
+  4. Writes every tool call + the model's rationale to an append-only agent decision
+     log, separate from (but linked to) the existing compliance decision/audit tables.
 
-This is intentionally a single-agent tool-use loop rather than a
-multi-agent framework — for an auditable compliance workflow, a
-single reasoning loop with well-scoped tools is easier to log,
-review, and reason about than a multi-agent graph.
+This is intentionally a single-agent tool-use loop rather than a multi-agent
+framework -- for an auditable compliance workflow, a single reasoning loop with
+well-scoped tools is easier to log, review, and reason about than a multi-agent
+graph.
 """
 
 import json
@@ -25,31 +24,33 @@ import anthropic
 
 from tools import TOOL_SCHEMAS, TOOL_IMPLEMENTATIONS
 
-MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "claude-sonnet-5"
+MODEL = os.environ.get("COMPLIANCE_AGENT_MODEL", DEFAULT_MODEL)
 MAX_TOOL_TURNS = 6
 
-HIGH_SEVERITY_BANDS = {"HIGH", "CRITICAL"}
+# RiskBand values (app/models.py) are lowercase strings -- "low"/"medium"/"high"/"critical".
+HIGH_RISK_BANDS = {"high", "critical"}
 
 SYSTEM_PROMPT = """You are a compliance triage assistant supporting the \
-Employee Conduct Compliance program. You help analysts by:
+Vendor Due-Diligence Gate. You help analysts by:
 
-1. Extracting structured fields from raw incident reports.
-2. Calling evaluate_incident to get the AUTHORITATIVE severity band and \
-escalation requirement. You never state, imply, or estimate a severity \
-band yourself — it must come from that tool's response.
-3. Explaining your reasoning in plain language so it can be stored as \
-part of the audit record.
-4. Proposing next steps (investigator assignment, escalation to Legal/HR, \
-requesting more information). For HIGH or CRITICAL severity cases, you \
-propose the action and explain why, but do not call assign_investigator \
-yourself — a human compliance manager must confirm it first.
+1. Extracting structured vendor-transaction fields from a raw description.
+2. Calling evaluate_transaction to get the AUTHORITATIVE decision and risk band. \
+You never state, imply, or estimate a decision or risk band yourself -- it must \
+come from that tool's response.
+3. Explaining your reasoning in plain language so it can be stored as part of \
+the audit record.
+4. Proposing next steps (reviewer assignment, escalation to Legal/Finance/ \
+Procurement, requesting more evidence). For HIGH or CRITICAL risk cases, you \
+propose the assignment and explain why, but do not call assign_reviewer \
+yourself -- a human compliance manager must confirm it first.
 
-If a report is missing information needed for evaluate_incident (e.g. \
-jurisdiction, whether protected characteristics are involved), ask a \
+If a transaction description is missing information evaluate_transaction needs \
+(e.g. which control applies, required evidence for that control), ask a \
 clarifying question rather than guessing.
 
-Always ground your rule references in the output of get_active_rules \
-rather than assumed knowledge of the four controls.
+Always ground your control references in the output of get_active_rules rather \
+than assumed knowledge of the eight controls.
 """
 
 
@@ -65,28 +66,28 @@ def _append_log(entry: dict) -> None:
 
 def _blocked_tool_call(tool_name: str, tool_input: dict) -> bool:
     """
-    Gate autonomous actions on HIGH/CRITICAL cases. Requires the caller
-    to have already run evaluate_incident and to be tracking the last
-    known severity band for this case_id — see run_agent() below for
-    the simple in-session tracking used here.
+    Gate autonomous actions on HIGH/CRITICAL cases. Requires the caller to have
+    already run evaluate_transaction and to be tracking the last known risk band
+    for this case_id -- see run_agent() below for the simple in-session tracking
+    used here.
     """
-    return tool_name == "assign_investigator"
+    return tool_name == "assign_reviewer"
 
 
-def run_agent(incident_report_text: str, submitted_by: str) -> dict:
+def run_agent(transaction_description: str, submitted_by: str) -> dict:
     """
-    Run the agent over a raw incident report.
+    Run the agent over a raw transaction description.
 
-    Returns a dict with the final assistant message, the full tool-call
-    trace, and a flag indicating whether human confirmation is pending
-    before any investigator assignment can proceed.
+    Returns a dict with the final assistant message, the full tool-call trace, and
+    a flag indicating whether human confirmation is pending before any reviewer
+    assignment can proceed.
     """
     client = anthropic.Anthropic()
     session_id = str(uuid.uuid4())
 
-    messages = [{"role": "user", "content": incident_report_text}]
+    messages = [{"role": "user", "content": transaction_description}]
     trace = []
-    last_severity_band = None
+    last_risk_band = None
     pending_human_confirmation = None
 
     for turn in range(MAX_TOOL_TURNS):
@@ -111,13 +112,13 @@ def run_agent(incident_report_text: str, submitted_by: str) -> dict:
                 "submitted_by": submitted_by,
                 "event": "agent_final_response",
                 "text": final_text,
-                "last_severity_band": last_severity_band,
+                "last_risk_band": last_risk_band,
                 "trace": trace,
             })
             return {
                 "session_id": session_id,
                 "response": final_text,
-                "severity_band": last_severity_band,
+                "risk_band": last_risk_band,
                 "pending_human_confirmation": pending_human_confirmation,
                 "trace": trace,
             }
@@ -127,25 +128,25 @@ def run_agent(incident_report_text: str, submitted_by: str) -> dict:
             tool_name = block.name
             tool_input = block.input
 
-            if _blocked_tool_call(tool_name, tool_input) and last_severity_band in HIGH_SEVERITY_BANDS:
+            if _blocked_tool_call(tool_name, tool_input) and last_risk_band in HIGH_RISK_BANDS:
                 result = {
                     "status": "blocked",
                     "reason": (
                         f"{tool_name} requires human confirmation for "
-                        f"{last_severity_band} severity cases. "
+                        f"{last_risk_band} risk cases. "
                         "Escalate to a compliance_manager for sign-off."
                     ),
                 }
                 pending_human_confirmation = {
                     "tool_name": tool_name,
                     "tool_input": tool_input,
-                    "severity_band": last_severity_band,
+                    "risk_band": last_risk_band,
                 }
             else:
                 try:
                     result = TOOL_IMPLEMENTATIONS[tool_name](**tool_input)
-                    if tool_name == "evaluate_incident":
-                        last_severity_band = result.get("severity_band") or result.get("severity")
+                    if tool_name == "evaluate_transaction":
+                        last_risk_band = result.get("risk_band")
                 except Exception as e:
                     result = {"status": "error", "error": str(e)}
 
@@ -170,8 +171,8 @@ def run_agent(incident_report_text: str, submitted_by: str) -> dict:
     })
     return {
         "session_id": session_id,
-        "response": "Agent did not reach a final answer within the turn limit — routing to human review.",
-        "severity_band": last_severity_band,
+        "response": "Agent did not reach a final answer within the turn limit -- routing to human review.",
+        "risk_band": last_risk_band,
         "pending_human_confirmation": pending_human_confirmation,
         "trace": trace,
     }

@@ -1,13 +1,14 @@
 """
-Tool wrappers around the existing FastAPI Compliance service.
+Tool wrappers around the existing FastAPI Vendor Due-Diligence Gate service.
 
 These do NOT reimplement any compliance logic. Every function here is a thin
-HTTP call into your existing app/main.py routes. The deterministic severity
-scoring, escalation thresholds, and rule catalogs stay exactly where they are
-today (app/ + data/rules/) — the agent only ever reads results from them.
+HTTP call into the existing app/main.py routes. The deterministic risk scoring,
+escalation thresholds, and rule catalogs stay exactly where they are today
+(app/ + data/rules/) -- the agent only ever reads results from them.
 
-Adjust BASE_URL, auth handling, and payload shapes to match your actual
-app/main.py route signatures once you compare against this file.
+Calls back into the running app over HTTP (COMPLIANCE_API_BASE_URL) rather than
+calling app.engine directly, so the agent goes through the same auth/RBAC path as
+every other caller -- it has no special access.
 """
 
 import os
@@ -15,14 +16,23 @@ import httpx
 
 BASE_URL = os.environ.get("COMPLIANCE_API_BASE_URL", "http://127.0.0.1:8000")
 
-# Service-level token for the agent's own calls into the API.
-# Should be scoped to the least-privilege role the agent needs
-# (recommend a dedicated "compliance_agent" role, not compliance_manager).
+# The agent's own identity for its calls back into the API. If COMPLIANCE_AGENT_TOKEN
+# is set, it's sent as a signed bearer token (production / anywhere COMPLIANCE_AUTH_SECRET
+# or Cognito is enforced); otherwise it falls back to the insecure X-User-Id/X-User-Role
+# headers, which only work when the API has COMPLIANCE_ALLOW_INSECURE_HEADERS=true (e.g.
+# dev_server.py) -- convenient for local use, refused by the API otherwise.
 AGENT_SERVICE_TOKEN = os.environ.get("COMPLIANCE_AGENT_TOKEN", "")
+AGENT_SERVICE_USER_ID = os.environ.get("COMPLIANCE_AGENT_USER_ID", "compliance-agent")
+# compliance_manager (not compliance_analyst) because assign_reviewer below calls
+# POST /reviews/{case_id}/assign, which is manager-only -- see app/main.py.
+AGENT_SERVICE_ROLE = os.environ.get("COMPLIANCE_AGENT_ROLE", "compliance_manager")
 
 
 def _headers() -> dict:
-    return {"Authorization": f"Bearer {AGENT_SERVICE_TOKEN}"}
+    if AGENT_SERVICE_TOKEN:
+        return {"Authorization": f"Bearer {AGENT_SERVICE_TOKEN}"}
+
+    return {"X-User-Id": AGENT_SERVICE_USER_ID, "X-User-Role": AGENT_SERVICE_ROLE}
 
 
 def _client() -> httpx.Client:
@@ -30,32 +40,31 @@ def _client() -> httpx.Client:
 
 
 # ---------------------------------------------------------------------------
-# Tool implementations — each maps 1:1 to an existing endpoint
+# Tool implementations -- each maps 1:1 to an existing endpoint
 # ---------------------------------------------------------------------------
 
 def get_active_rules() -> dict:
-    """GET /rules/current — fetch the current versioned rule catalog."""
+    """GET /rules -- fetch every current, versioned procurement control."""
     with _client() as c:
-        r = c.get("/rules/current")
+        r = c.get("/rules")
         r.raise_for_status()
         return r.json()
 
 
-def evaluate_incident(payload: dict) -> dict:
+def evaluate_transaction(payload: dict) -> dict:
     """
-    POST /evaluate — run the deterministic severity/escalation engine
-    on a structured incident report. This is the ONLY source of truth
-    for severity band. The agent must never compute or override this itself.
+    POST /evaluate -- run the deterministic risk/escalation engine on a structured
+    vendor transaction. This is the ONLY source of truth for risk_band and decision.
+    The agent must never state or estimate either itself.
 
-    Expected payload shape (adjust to match app/main.py's request model):
+    Expected payload shape (VendorTransaction, see app/models.py) -- at minimum:
     {
-        "control_id": "CONDUCT-HARASSMENT-001",
-        "description": "...",
-        "protected_characteristics": [...],
-        "prior_complaints": 0,
-        "involved_parties": [...],
-        "jurisdiction": "US-CA"
+        "case_id": "...", "transaction_id": "...", "control_id": "PROC-SPEND-APPROVAL-001",
+        "vendor_name": "...", "requestor_role": "...", "amount": 0, "currency": "USD",
+        "business_justification": "..."
     }
+    Plus whatever control-specific evidence fields apply (approval_record,
+    vendor_screening_record, gift_recipient_type, vendor_payment_details_changed, etc.)
     """
     with _client() as c:
         r = c.post("/evaluate", json=payload)
@@ -63,33 +72,33 @@ def evaluate_incident(payload: dict) -> dict:
         return r.json()
 
 
-def get_open_investigations() -> dict:
-    """GET /investigations/queue — active cases requiring action."""
+def get_open_reviews() -> dict:
+    """GET /reviews/queue -- active cases currently requiring review action."""
     with _client() as c:
-        r = c.get("/investigations/queue")
+        r = c.get("/reviews/queue")
         r.raise_for_status()
         return r.json()
 
 
 def get_decision(case_id: str) -> dict:
-    """GET /decisions/{case_id} — retrieve a prior compliance decision."""
+    """GET /decisions/{case_id} -- retrieve a prior compliance decision."""
     with _client() as c:
         r = c.get(f"/decisions/{case_id}")
         r.raise_for_status()
         return r.json()
 
 
-def assign_investigator(case_id: str, investigator: str) -> dict:
+def assign_reviewer(case_id: str, reviewer_id: str) -> dict:
     """
-    POST /reviews/{case_id}/assign — assign an investigator.
+    POST /reviews/{case_id}/assign -- assign a reviewer. Manager-only on the API
+    side regardless of what role calls this tool.
 
-    NOTE: For HIGH/CRITICAL severity, this should require human
-    confirmation before being called — see orchestrator.py's
-    requires_human_confirmation() gate. Do not let the agent call
-    this autonomously for high-severity cases.
+    NOTE: For HIGH/CRITICAL risk, this should require human confirmation before
+    being called -- see orchestrator.py's _blocked_tool_call() gate. Do not let the
+    agent call this autonomously for high-risk cases.
     """
     with _client() as c:
-        r = c.post(f"/reviews/{case_id}/assign", json={"investigator": investigator})
+        r = c.post(f"/reviews/{case_id}/assign", json={"reviewer_id": reviewer_id})
         r.raise_for_status()
         return r.json()
 
@@ -102,79 +111,87 @@ TOOL_SCHEMAS = [
     {
         "name": "get_active_rules",
         "description": (
-            "Fetch the current versioned catalog of conduct compliance rules "
-            "(CONDUCT-HARASSMENT-001, CONDUCT-DISCRIMINATION-001, "
-            "CONDUCT-CLIENT-001, CONDUCT-INTL-GOV-001). Call this first to "
-            "ground your reasoning in the current rule definitions rather "
-            "than assuming them."
+            "Fetch every current, versioned procurement control catalog (spend "
+            "approval, vendor due diligence, jurisdiction, conflict of interest, "
+            "expense receipts, part-time contract classification, gifts and "
+            "hospitality, payment-change verification). Call this first to ground "
+            "your reasoning in the current rule definitions and their control_id "
+            "values, rather than assuming them."
         ),
         "input_schema": {"type": "object", "properties": {}},
     },
     {
-        "name": "evaluate_incident",
+        "name": "evaluate_transaction",
         "description": (
-            "Submit a structured incident report to the deterministic "
-            "compliance evaluation engine. Returns the authoritative "
-            "severity band (LOW/MEDIUM/HIGH/CRITICAL) and escalation "
-            "requirement. This is the ONLY source of truth for severity — "
-            "never state a severity band that didn't come from this tool."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "control_id": {
-                    "type": "string",
-                    "enum": [
-                        "CONDUCT-HARASSMENT-001",
-                        "CONDUCT-DISCRIMINATION-001",
-                        "CONDUCT-CLIENT-001",
-                        "CONDUCT-INTL-GOV-001",
-                    ],
-                },
-                "description": {"type": "string"},
-                "protected_characteristics": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "prior_complaints": {"type": "integer"},
-                "involved_parties": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "jurisdiction": {"type": "string"},
-            },
-            "required": ["control_id", "description"],
-        },
-    },
-    {
-        "name": "get_open_investigations",
-        "description": "List active investigation cases currently in the queue.",
-        "input_schema": {"type": "object", "properties": {}},
-    },
-    {
-        "name": "assign_investigator",
-        "description": (
-            "Assign an investigator to a case. For HIGH/CRITICAL severity "
-            "cases, this call will be blocked unless a human has already "
-            "confirmed the assignment — propose the assignment in your "
-            "response instead of calling this tool directly for those cases."
+            "Submit a structured vendor transaction to the deterministic "
+            "compliance evaluation engine. Returns the authoritative decision "
+            "(approved/blocked/insufficient_evidence/human_review_required) and "
+            "risk band (low/medium/high/critical). This is the ONLY source of "
+            "truth for risk -- never state a risk band or decision that didn't "
+            "come from this tool."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "case_id": {"type": "string"},
-                "investigator": {"type": "string"},
+                "transaction_id": {"type": "string"},
+                "control_id": {
+                    "type": "string",
+                    "description": "One of the control_id values returned by get_active_rules.",
+                },
+                "vendor_name": {"type": "string"},
+                "requestor_role": {"type": "string"},
+                "amount": {"type": "number"},
+                "currency": {"type": "string"},
+                "business_justification": {"type": "string"},
+                "evidence": {
+                    "type": "object",
+                    "description": (
+                        "Any control-specific evidence fields the rule's required_evidence "
+                        "calls for (e.g. approval_record, vendor_screening_record, "
+                        "conflict_of_interest_record, receipt_record, "
+                        "misclassification_assessment_record, payment_change_verification_record), "
+                        "merged into the top-level payload."
+                    ),
+                },
             },
-            "required": ["case_id", "investigator"],
+            "required": ["case_id", "transaction_id", "control_id", "vendor_name", "amount", "currency"],
+        },
+    },
+    {
+        "name": "get_open_reviews",
+        "description": "List active cases currently in the review queue.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "assign_reviewer",
+        "description": (
+            "Assign a reviewer to a case. For HIGH/CRITICAL risk cases, this call "
+            "will be blocked unless a human has already confirmed the assignment "
+            "-- propose the assignment in your response instead of calling this "
+            "tool directly for those cases."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "case_id": {"type": "string"},
+                "reviewer_id": {"type": "string"},
+            },
+            "required": ["case_id", "reviewer_id"],
         },
     },
 ]
 
+
+def _evaluate_transaction_tool(**kwargs) -> dict:
+    evidence = kwargs.pop("evidence", {}) or {}
+    payload = {**kwargs, **evidence}
+    return evaluate_transaction(payload)
+
+
 TOOL_IMPLEMENTATIONS = {
     "get_active_rules": lambda **kw: get_active_rules(),
-    "evaluate_incident": lambda **kw: evaluate_incident(kw.get("payload", kw)),
-    "get_open_investigations": lambda **kw: get_open_investigations(),
-    "assign_investigator": lambda **kw: assign_investigator(
-        kw["case_id"], kw["investigator"]
-    ),
+    "evaluate_transaction": lambda **kw: _evaluate_transaction_tool(**kw),
+    "get_open_reviews": lambda **kw: get_open_reviews(),
+    "assign_reviewer": lambda **kw: assign_reviewer(kw["case_id"], kw["reviewer_id"]),
 }
