@@ -28,7 +28,8 @@ It also includes workspace customization for Copilot:
 - `PROC-VENDOR-COI-001`: a flagged potential conflict of interest between the requestor and the vendor requires formal disclosure and an explicit compliance clearance decision; a cleared conflict still routes to mandatory review rather than auto-closing
 - `PROC-EXPENSE-RECEIPT-001`: expenses at or above the receipt threshold require an attached itemized receipt; a receipt total that doesn't reconcile with the claimed amount within tolerance routes to human review
 - severity-based escalation: transactions are classified into risk bands (LOW, MEDIUM, HIGH, CRITICAL) with corresponding escalation actions
-- output: structured compliance decision record with severity scores, risk metadata, and review state
+- escalation notifications: each control has a versioned, risk-band-driven policy (in its rule catalog) for which stakeholder groups (Procurement, Legal, Finance) to notify; a decision's `escalation_recipients` field is computed from that policy rather than hardcoded
+- output: structured compliance decision record with severity scores, risk metadata, escalation recipients, and review state
 
 ## Run locally
 
@@ -81,11 +82,12 @@ Temporary migration fallback:
 - review queue metrics aggregate active cases by severity band and track SLA aging
 - summary reporting includes severity-band distributions for governance oversight
 - the dashboard summary breaks decisions down per control (including controls with zero traffic) and surfaces the most frequently triggered risk signals
+- escalation recipients (Procurement, Legal, Finance) are computed per decision from each control's versioned, risk-band notification policy, and the dashboard aggregates pending notification counts by recipient group
 - signed bearer token auth is enforced on protected endpoints with key-id support and optional legacy header fallback
 - role-based access controls protect sensitive transaction and review data
 - append-only decision and review history is preserved alongside current case state
 
 ## Next steps
 
-- implement escalation notifications to Procurement, Legal, and Finance based on severity band
+- wire `escalation_recipients` to an actual outbound channel (email/Slack) once real distribution lists exist; today it's a computed, auditable field rather than a sent notification
 - decide whether the previous employee-conduct domain content (`docs/ethics_workflow.md` and related narrative docs) should be archived, ported to a separate deployment, or retired

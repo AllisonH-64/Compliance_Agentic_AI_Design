@@ -48,6 +48,12 @@ class RiskBand(str, Enum):
     CRITICAL = "critical"
 
 
+class NotificationRecipient(str, Enum):
+    PROCUREMENT = "procurement"
+    LEGAL = "legal"
+    FINANCE = "finance"
+
+
 class ReopenReason(str, Enum):
     NEW_EVIDENCE = "new_evidence"
     POLICY_UPDATE = "policy_update"
@@ -180,6 +186,10 @@ class DecisionRecord(BaseModel):
     signal_rationale: list[str] = Field(default_factory=list)
     escalation_decision: str = "auto_close"
     escalation_policy_version: str = "vendor-due-diligence-v1"
+    escalation_recipients: list[NotificationRecipient] = Field(
+        default_factory=list,
+        description="Stakeholder groups (procurement, legal, finance) to notify, driven by the rule's risk-band notification policy",
+    )
     review_cycle_id: int = Field(default=1, ge=1)
     reopen_reason: ReopenReason | None = None
     review_required: bool
@@ -281,4 +291,5 @@ class DashboardSummary(BaseModel):
     decision_count_by_risk_band: dict[RiskBand, int]
     controls: list[ControlSummary]
     top_triggered_signals: list[SignalFrequency]
+    pending_notifications_by_recipient: dict[NotificationRecipient, int]
     queue_metrics: ReviewQueueMetrics

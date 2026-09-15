@@ -9,6 +9,7 @@ from app.models import (
     DecisionRecord,
     DecisionState,
     MarketRiskLevel,
+    NotificationRecipient,
     RiskBand,
     ReviewQueueMetrics,
     ReviewStatus,
@@ -780,6 +781,16 @@ def _evaluate_expense_receipt(
     )
 
 
+def _determine_escalation_recipients(rule: RuleMetadata, risk_band: RiskBand) -> list[NotificationRecipient]:
+    """Look up which stakeholder groups to notify for this risk band, per the rule's
+    versioned notification policy. An unconfigured rule or band notifies no one rather
+    than guessing, consistent with the same deterministic, policy-traceable approach
+    used for every other escalation trigger."""
+    notification_config = (rule.escalation_triggers or {}).get("notification_recipients", {})
+    configured_recipients = notification_config.get(risk_band.value, [])
+    return [NotificationRecipient(recipient) for recipient in configured_recipients]
+
+
 def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecord:
     """Evaluate a vendor transaction case against the applicable procurement rule."""
     rule = load_rule(vendor_transaction.control_id)
@@ -787,18 +798,21 @@ def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecor
 
     if rule.control_domain == "procurement":
         if "RECEIPT" in rule.control_id:
-            return _evaluate_expense_receipt(vendor_transaction, rule, evaluated_at)
+            decision_record = _evaluate_expense_receipt(vendor_transaction, rule, evaluated_at)
         elif "COI" in rule.control_id:
-            return _evaluate_conflict_of_interest(vendor_transaction, rule, evaluated_at)
+            decision_record = _evaluate_conflict_of_interest(vendor_transaction, rule, evaluated_at)
         elif "INTL" in rule.control_id:
-            return _evaluate_jurisdiction_due_diligence(vendor_transaction, rule, evaluated_at)
+            decision_record = _evaluate_jurisdiction_due_diligence(vendor_transaction, rule, evaluated_at)
         elif "DUEDILIGENCE" in rule.control_id:
-            return _evaluate_vendor_due_diligence(vendor_transaction, rule, evaluated_at)
+            decision_record = _evaluate_vendor_due_diligence(vendor_transaction, rule, evaluated_at)
         elif "SPEND-APPROVAL" in rule.control_id:
-            return _evaluate_spend_approval(vendor_transaction, rule, evaluated_at)
+            decision_record = _evaluate_spend_approval(vendor_transaction, rule, evaluated_at)
         else:
             # Default handler for unknown procurement controls
-            return _evaluate_spend_approval(vendor_transaction, rule, evaluated_at)
+            decision_record = _evaluate_spend_approval(vendor_transaction, rule, evaluated_at)
+
+        escalation_recipients = _determine_escalation_recipients(rule, decision_record.risk_band)
+        return decision_record.model_copy(update={"escalation_recipients": escalation_recipients})
 
     raise ValueError(f"Unsupported control_domain: {rule.control_domain}")
 
@@ -875,6 +889,7 @@ def calculate_dashboard_summary(
 
     decision_count_by_risk_band = {band: 0 for band in RiskBand}
     signal_counts: dict[str, int] = {}
+    pending_notifications_by_recipient = {recipient: 0 for recipient in NotificationRecipient}
 
     for decision in decisions:
         control_id = decision.rule_metadata.control_id
@@ -909,6 +924,10 @@ def calculate_dashboard_summary(
         for signal_id in decision.triggered_signal_ids:
             signal_counts[signal_id] = signal_counts.get(signal_id, 0) + 1
 
+        if decision.review_required:
+            for recipient in decision.escalation_recipients:
+                pending_notifications_by_recipient[recipient] += 1
+
     controls = [
         ControlSummary(control_id=control_id, **totals) for control_id, totals in sorted(control_totals.items())
     ]
@@ -930,5 +949,6 @@ def calculate_dashboard_summary(
         decision_count_by_risk_band=decision_count_by_risk_band,
         controls=controls,
         top_triggered_signals=top_triggered_signals,
+        pending_notifications_by_recipient=pending_notifications_by_recipient,
         queue_metrics=calculate_review_queue_metrics(decisions, sla_target_hours),
     )

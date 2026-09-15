@@ -25,6 +25,13 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - insufficient_evidence
 - human_review_required
 
+## Escalation Notifications
+
+- each control's rule catalog carries a `notification_recipients` policy under `escalation_triggers`, mapping risk band to stakeholder groups (`procurement`, `legal`, `finance`)
+- `evaluate_vendor_case` computes `escalation_recipients` on every `DecisionRecord` from that policy after the deterministic evaluator runs, so it's uniform across all five evaluators rather than duplicated per control
+- a LOW-band decision always resolves to no recipients; a control with no configured policy for a band also resolves to no recipients rather than guessing
+- this is a computed, auditable routing field today, not a sent notification — see README "Next steps" for wiring it to an actual outbound channel
+
 ## Components
 
 - app/main.py exposes FastAPI endpoints for evaluation, review lifecycle, and reporting
@@ -72,6 +79,7 @@ The implemented program focuses on vendor spend and due-diligence gating rather 
 - verified: queue metrics include status counts, SLA breach counts, and risk-band segmentation
 - verified: summary reporting includes totals, completed reviews, overrides, and reopen dimensions
 - verified: dashboard summary aggregates decisions per control (including zero-traffic controls) and per triggered signal
+- verified: escalation recipients are computed per risk band per control and aggregated on the dashboard by recipient group
 - verified: bearer auth, issuer/audience checks, and key-id trust behavior are covered by tests
 - verified: `/reports/summary` and `/reviews/{case_id}/reopen` — previously broken by a field-name mismatch and a missing enum member from the prior domain — now work and are covered by tests
 

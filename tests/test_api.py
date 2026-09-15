@@ -218,6 +218,132 @@ def test_reports_summary_counts_completed_reviews_and_overrides(tmp_path: Path) 
     assert payload["reopened_case_count"] == 0
 
 
+def test_low_risk_case_has_no_escalation_recipients(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "escalation-low.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-escalation-low-1",
+            "transaction_id": "po-escalation-low-1",
+            "vendor_name": "Acme Office Supplies",
+            "requestor_role": "office_manager",
+            "amount": 450,
+            "currency": "USD",
+            "business_justification": "Quarterly office supply restock.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["risk_band"] == "low"
+    assert payload["escalation_recipients"] == []
+
+
+def test_medium_risk_case_notifies_procurement_only(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "escalation-medium.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-escalation-medium-1",
+            "transaction_id": "po-escalation-medium-1",
+            "control_id": "PROC-EXPENSE-RECEIPT-001",
+            "vendor_name": "Riverside Hotel",
+            "requestor_role": "account_executive",
+            "amount": 500,
+            "currency": "USD",
+            "business_justification": "Multi-night stay for an extended client engagement.",
+            "receipt_record": {"attached": True, "receipt_total": 500.0},
+            "prior_flagged_transactions_12m": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["risk_band"] == "medium"
+    assert payload["escalation_recipients"] == ["procurement"]
+
+
+def test_critical_due_diligence_failure_notifies_all_three_stakeholders(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "escalation-critical.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-escalation-critical-1",
+            "transaction_id": "po-escalation-critical-1",
+            "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+            "vendor_name": "Starline Trading Co",
+            "requestor_role": "procurement_lead",
+            "amount": 100,
+            "currency": "USD",
+            "business_justification": "Routine supply order.",
+            "vendor_screening_record": {"completed": True, "sanctions_check_passed": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "blocked"
+    assert payload["risk_band"] == "critical"
+    assert set(payload["escalation_recipients"]) == {"procurement", "legal", "finance"}
+
+
+def test_dashboard_summary_counts_pending_notifications_by_recipient(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "escalation-dashboard.db")
+    client = TestClient(app)
+
+    client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-escalation-dashboard-medium-1",
+            "transaction_id": "po-escalation-dashboard-medium-1",
+            "control_id": "PROC-EXPENSE-RECEIPT-001",
+            "vendor_name": "Riverside Hotel",
+            "requestor_role": "account_executive",
+            "amount": 500,
+            "currency": "USD",
+            "business_justification": "Multi-night stay for an extended client engagement.",
+            "receipt_record": {"attached": True, "receipt_total": 500.0},
+            "prior_flagged_transactions_12m": 1,
+        },
+    )
+    client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-escalation-dashboard-critical-1",
+            "transaction_id": "po-escalation-dashboard-critical-1",
+            "control_id": "PROC-VENDOR-DUEDILIGENCE-001",
+            "vendor_name": "Starline Trading Co",
+            "requestor_role": "procurement_lead",
+            "amount": 100,
+            "currency": "USD",
+            "business_justification": "Routine supply order.",
+            "vendor_screening_record": {"completed": True, "sanctions_check_passed": False},
+        },
+    )
+
+    response = client.get(
+        "/dashboard/summary",
+        headers=_auth_headers("auditor-1", "auditor"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["pending_notifications_by_recipient"]
+    assert payload["procurement"] == 2
+    assert payload["legal"] == 1
+    assert payload["finance"] == 1
+
+
 def test_dashboard_summary_aggregates_by_control_and_signal(tmp_path: Path) -> None:
     set_db_path(tmp_path / "dashboard.db")
     client = TestClient(app)

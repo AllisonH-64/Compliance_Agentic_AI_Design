@@ -17,6 +17,12 @@
     "dual_approval_amount": 10000,
     "risk_score_medium": 4,
     "risk_score_high": 6,
-    "risk_score_critical": 8
+    "risk_score_critical": 8,
+    "notification_recipients": {
+      "low": [],
+      "medium": ["procurement"],
+      "high": ["procurement", "finance"],
+      "critical": ["procurement", "finance", "legal"]
+    }
   }
 }

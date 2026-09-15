@@ -167,6 +167,7 @@ def _deserialize_decision(payload: str) -> DecisionRecord:
     raw_record.setdefault("signal_rationale", [])
     raw_record.setdefault("escalation_decision", "auto_close")
     raw_record.setdefault("escalation_policy_version", "vendor-due-diligence-v1")
+    raw_record.setdefault("escalation_recipients", [])
     raw_record.setdefault("review_cycle_id", 1)
     raw_record.setdefault("reopen_reason", None)
 
