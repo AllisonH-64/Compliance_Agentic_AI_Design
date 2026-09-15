@@ -62,6 +62,15 @@ class ApprovalRecord(BaseModel):
     document_id: str | None = Field(default=None, description="Identifier for the approval record document")
 
 
+class ConflictOfInterestRecord(BaseModel):
+    disclosed: bool = Field(..., description="Whether the potential conflict of interest has been formally disclosed")
+    cleared: bool | None = Field(
+        default=None,
+        description="Compliance decision on the disclosed conflict: True cleared, False rejected, None still pending",
+    )
+    document_id: str | None = Field(default=None, description="Identifier for the conflict-of-interest disclosure document")
+
+
 class VendorScreeningRecord(BaseModel):
     completed: bool = Field(..., description="Whether vendor due-diligence screening has been completed")
     sanctions_check_passed: bool | None = Field(
@@ -113,6 +122,14 @@ class VendorTransaction(BaseModel):
     vendor_screening_record: VendorScreeningRecord | None = Field(
         default=None,
         description="Vendor due-diligence screening evidence attached when required by the selected control",
+    )
+    potential_conflict_of_interest: bool = Field(
+        default=False,
+        description="Whether a potential conflict of interest with the vendor has been flagged (e.g. personal, familial, or financial relationship)",
+    )
+    conflict_of_interest_record: ConflictOfInterestRecord | None = Field(
+        default=None,
+        description="Conflict-of-interest disclosure and compliance clearance evidence",
     )
     prior_flagged_transactions_12m: int = Field(
         default=0,

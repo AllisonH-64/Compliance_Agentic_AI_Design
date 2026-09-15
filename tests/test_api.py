@@ -644,6 +644,145 @@ def test_low_risk_jurisdiction_auto_closes(tmp_path: Path) -> None:
     assert payload["escalation_decision"] == "auto_close"
 
 
+def test_evaluate_missing_coi_disclosure_requires_evidence(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "coi-missing-disclosure.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-coi-missing-disclosure-1",
+            "transaction_id": "po-coi-missing-disclosure-1",
+            "control_id": "PROC-VENDOR-COI-001",
+            "vendor_name": "Harborview Design Studio",
+            "requestor_role": "marketing_manager",
+            "amount": 3200,
+            "currency": "USD",
+            "business_justification": "Brand refresh design work.",
+            "potential_conflict_of_interest": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "insufficient_evidence"
+    assert payload["review_required"] is True
+    assert "SIG-MISSING-COI-DISCLOSURE" in payload["triggered_signal_ids"]
+
+
+def test_coi_pending_clearance_requires_human_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "coi-pending.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-coi-pending-1",
+            "transaction_id": "po-coi-pending-1",
+            "control_id": "PROC-VENDOR-COI-001",
+            "vendor_name": "Harborview Design Studio",
+            "requestor_role": "marketing_manager",
+            "amount": 3200,
+            "currency": "USD",
+            "business_justification": "Brand refresh design work.",
+            "potential_conflict_of_interest": True,
+            "conflict_of_interest_record": {"disclosed": True, "cleared": None},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "human_review_required"
+    assert payload["review_required"] is True
+    assert "SIG-COI-REVIEW-PENDING" in payload["triggered_signal_ids"]
+
+
+def test_coi_rejected_by_compliance_blocks_transaction(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "coi-rejected.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-coi-rejected-1",
+            "transaction_id": "po-coi-rejected-1",
+            "control_id": "PROC-VENDOR-COI-001",
+            "vendor_name": "Harborview Design Studio",
+            "requestor_role": "marketing_manager",
+            "amount": 3200,
+            "currency": "USD",
+            "business_justification": "Brand refresh design work.",
+            "potential_conflict_of_interest": True,
+            "conflict_of_interest_record": {"disclosed": True, "cleared": False},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "blocked"
+    assert payload["risk_band"] == "critical"
+    assert "SIG-COI-REJECTED" in payload["triggered_signal_ids"]
+
+
+def test_coi_cleared_by_compliance_still_routes_to_review(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "coi-cleared.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-coi-cleared-1",
+            "transaction_id": "po-coi-cleared-1",
+            "control_id": "PROC-VENDOR-COI-001",
+            "vendor_name": "Harborview Design Studio",
+            "requestor_role": "marketing_manager",
+            "amount": 3200,
+            "currency": "USD",
+            "business_justification": "Brand refresh design work.",
+            "potential_conflict_of_interest": True,
+            "conflict_of_interest_record": {"disclosed": True, "cleared": True},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is True
+    assert payload["risk_band"] in ("high", "critical")
+    assert payload["escalation_decision"] == "queue_for_review"
+
+
+def test_no_flagged_coi_auto_closes(tmp_path: Path) -> None:
+    set_db_path(tmp_path / "coi-not-flagged.db")
+    client = TestClient(app)
+
+    response = client.post(
+        "/evaluate",
+        headers=_auth_headers("employee-1", "employee"),
+        json={
+            "case_id": "case-coi-not-flagged-1",
+            "transaction_id": "po-coi-not-flagged-1",
+            "control_id": "PROC-VENDOR-COI-001",
+            "vendor_name": "Acme Office Supplies",
+            "requestor_role": "office_manager",
+            "amount": 450,
+            "currency": "USD",
+            "business_justification": "Quarterly office supply restock.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "approved"
+    assert payload["review_required"] is False
+    assert payload["risk_band"] == "low"
+    assert payload["escalation_decision"] == "auto_close"
+
+
 def test_review_metrics_counts_sla_breach_for_aged_case(tmp_path: Path) -> None:
     set_db_path(tmp_path / "metrics-sla.db")
     client = TestClient(app)

@@ -68,6 +68,14 @@ def _build_base_evidence_references(vendor_transaction: VendorTransaction) -> li
                 f"vendor_screening_document:{vendor_transaction.vendor_screening_record.document_id}"
             )
 
+    if vendor_transaction.conflict_of_interest_record is not None:
+        evidence_references.append("conflict_of_interest_record:attached")
+
+        if vendor_transaction.conflict_of_interest_record.document_id is not None:
+            evidence_references.append(
+                f"conflict_of_interest_document:{vendor_transaction.conflict_of_interest_record.document_id}"
+            )
+
     return evidence_references
 
 
@@ -516,13 +524,147 @@ def _evaluate_jurisdiction_due_diligence(
     )
 
 
+def _evaluate_conflict_of_interest(
+    vendor_transaction: VendorTransaction,
+    rule: RuleMetadata,
+    evaluated_at: str,
+) -> DecisionRecord:
+    """Evaluate a flagged potential conflict of interest between the requestor and the vendor."""
+    evidence_references = _build_base_evidence_references(vendor_transaction)
+
+    escalation_triggers = rule.escalation_triggers or {}
+    coi_elevated_amount = escalation_triggers.get("coi_elevated_amount", 5000)
+    risk_medium = escalation_triggers.get("risk_score_medium", 4)
+    risk_high = escalation_triggers.get("risk_score_high", 6)
+    risk_critical = escalation_triggers.get("risk_score_critical", 8)
+
+    base_risk = 2.0
+
+    if vendor_transaction.potential_conflict_of_interest:
+        base_risk += 4.0
+
+    if vendor_transaction.amount >= coi_elevated_amount:
+        base_risk += 1.5
+
+    if vendor_transaction.prior_flagged_transactions_12m >= 1:
+        base_risk += 1.0
+
+    base_risk = min(base_risk, 10.0)
+    risk_score = base_risk / 10.0
+    risk_band = _risk_band_for_score(base_risk, risk_medium, risk_high, risk_critical)
+
+    coi_review_required = vendor_transaction.potential_conflict_of_interest
+    record = vendor_transaction.conflict_of_interest_record
+
+    if coi_review_required and (record is None or not record.disclosed):
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.INSUFFICIENT_EVIDENCE,
+            evaluated_at=evaluated_at,
+            reasoning_summary=(
+                "A potential conflict of interest was flagged for this vendor but has not been formally disclosed."
+            ),
+            severity_score=0.65,
+            confidence_score=0.9,
+            recommended_action="Request a formal conflict-of-interest disclosure before spend proceeds.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.HIGH,
+            risk_score=0.65,
+            triggered_signal_ids=["SIG-MISSING-COI-DISCLOSURE"],
+            signal_rationale=["A flagged potential conflict of interest requires a formal disclosure on file."],
+            escalation_decision="queue_for_disclosure",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if record is not None and record.disclosed and record.cleared is False:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.BLOCKED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Compliance reviewed the disclosed conflict of interest and did not clear it to proceed.",
+            severity_score=0.9,
+            confidence_score=0.95,
+            recommended_action="Block the transaction. Route to an alternate, unconflicted vendor if available.",
+            evidence_references=evidence_references,
+            risk_band=RiskBand.CRITICAL,
+            risk_score=0.9,
+            triggered_signal_ids=["SIG-COI-REJECTED"],
+            signal_rationale=["Compliance rejected the disclosed conflict of interest."],
+            escalation_decision="mandatory_review",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    if coi_review_required and record is not None and record.disclosed and record.cleared is None:
+        return DecisionRecord(
+            case_id=vendor_transaction.case_id,
+            transaction_id=vendor_transaction.transaction_id,
+            decision=DecisionState.HUMAN_REVIEW_REQUIRED,
+            evaluated_at=evaluated_at,
+            reasoning_summary="Conflict of interest disclosed but a compliance clearance decision is still pending.",
+            severity_score=risk_score,
+            confidence_score=0.88,
+            recommended_action="Route to compliance manager for a clearance decision before spend proceeds.",
+            evidence_references=evidence_references,
+            risk_band=risk_band,
+            risk_score=risk_score,
+            triggered_signal_ids=["SIG-COI-REVIEW-PENDING"],
+            signal_rationale=["A disclosed conflict of interest requires an explicit compliance clearance decision."],
+            escalation_decision="queue_for_coi_clearance",
+            escalation_policy_version=VENDOR_ESCALATION_VERSION,
+            review_required=True,
+            review_status=ReviewStatus.PENDING,
+            rule_metadata=rule,
+        )
+
+    review_required = risk_band != RiskBand.LOW
+    if risk_band == RiskBand.CRITICAL:
+        action = "CRITICAL risk despite clearance. Immediate compliance manager review required."
+    elif risk_band == RiskBand.HIGH:
+        action = "Cleared, but logged for compliance analyst review given the flagged relationship."
+    elif risk_band == RiskBand.MEDIUM:
+        action = "Log for standard compliance review."
+    else:
+        action = "Approve and log. No further action required."
+
+    return DecisionRecord(
+        case_id=vendor_transaction.case_id,
+        transaction_id=vendor_transaction.transaction_id,
+        decision=DecisionState.APPROVED,
+        evaluated_at=evaluated_at,
+        reasoning_summary=f"Conflict-of-interest evaluation completed with risk score {base_risk:.1f}/10.",
+        severity_score=risk_score,
+        confidence_score=0.88,
+        recommended_action=action,
+        evidence_references=evidence_references,
+        risk_band=risk_band,
+        risk_score=risk_score,
+        triggered_signal_ids=[],
+        signal_rationale=[],
+        escalation_decision="auto_close" if not review_required else "queue_for_review",
+        escalation_policy_version=VENDOR_ESCALATION_VERSION,
+        review_required=review_required,
+        review_status=ReviewStatus.PENDING if review_required else ReviewStatus.NOT_REQUIRED,
+        rule_metadata=rule,
+    )
+
+
 def evaluate_vendor_case(vendor_transaction: VendorTransaction) -> DecisionRecord:
     """Evaluate a vendor transaction case against the applicable procurement rule."""
     rule = load_rule(vendor_transaction.control_id)
     evaluated_at = datetime.now(UTC).isoformat()
 
     if rule.control_domain == "procurement":
-        if "INTL" in rule.control_id:
+        if "COI" in rule.control_id:
+            return _evaluate_conflict_of_interest(vendor_transaction, rule, evaluated_at)
+        elif "INTL" in rule.control_id:
             return _evaluate_jurisdiction_due_diligence(vendor_transaction, rule, evaluated_at)
         elif "DUEDILIGENCE" in rule.control_id:
             return _evaluate_vendor_due_diligence(vendor_transaction, rule, evaluated_at)

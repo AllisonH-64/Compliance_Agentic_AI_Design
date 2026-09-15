@@ -1,0 +1,21 @@
+{
+  "control_id": "PROC-VENDOR-COI-001",
+  "control_domain": "procurement",
+  "policy_name": "Vendor Conflict of Interest Policy",
+  "policy_version": "2026-09-01",
+  "description": "Purchase orders and vendor transactions involving a flagged potential conflict of interest (personal, familial, or financial relationship between the requestor and the vendor) require formal disclosure and compliance clearance before spend is incurred.",
+  "severity_threshold": 4,
+  "required_evidence": [
+    "conflict_of_interest_record"
+  ],
+  "required_reviewer_role": "compliance_manager",
+  "international_applicability": [
+    "ALL"
+  ],
+  "escalation_triggers": {
+    "coi_elevated_amount": 5000,
+    "risk_score_medium": 4,
+    "risk_score_high": 6,
+    "risk_score_critical": 8
+  }
+}

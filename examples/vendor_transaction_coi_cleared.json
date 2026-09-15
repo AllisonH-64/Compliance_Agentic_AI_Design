@@ -1,0 +1,17 @@
+{
+  "case_id": "CASE-2013",
+  "transaction_id": "PO-5013",
+  "control_id": "PROC-VENDOR-COI-001",
+  "vendor_name": "Harborview Design Studio",
+  "vendor_id": "VEND-8021",
+  "requestor_role": "marketing_manager",
+  "amount": 3200,
+  "currency": "USD",
+  "business_justification": "Brand refresh design work. Requestor noted the studio owner is a family member.",
+  "potential_conflict_of_interest": true,
+  "conflict_of_interest_record": {
+    "disclosed": true,
+    "cleared": true
+  },
+  "prior_flagged_transactions_12m": 0
+}
