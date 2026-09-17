@@ -43,6 +43,10 @@ Open `http://127.0.0.1:8000/docs` for the interactive API docs.
 
 For quick manual testing without minting a JWT, run `python dev_server.py` instead — it sets `COMPLIANCE_ALLOW_INSECURE_HEADERS=true` so protected endpoints accept plain `X-User-Id`/`X-User-Role` headers.
 
+### Demo
+
+With `dev_server.py` running, `python demo_seed.py` populates it with 12 curated transactions spanning all 8 controls and a full review lifecycle (pending, assigned, in-review, completed, reopened), so `/dashboard/summary` and `/reviews/queue` have real, varied data to look at instead of an empty database. See [docs/demo_script.md](docs/demo_script.md) for a full presenter walkthrough.
+
 ### Authentication
 
 Protected endpoints require bearer authentication:
@@ -134,6 +138,7 @@ tests/                                 API test suite
 docs/                                  Design docs
 orchestrator.py, router.py, tools.py   Optional LLM triage agent
 dev_server.py                          Local dev server with insecure-header auth
+demo_seed.py                           Seeds the local database with demo data
 lambda_handler.py                      AWS Lambda entry point
 AGENTS.md, .github/agents/             Copilot workspace agent configuration
 ```
@@ -144,6 +149,7 @@ AGENTS.md, .github/agents/             Copilot workspace agent configuration
 - [docs/architecture.md](docs/architecture.md) — end-to-end design
 - [docs/mvp.md](docs/mvp.md) — MVP scope, components, and regulatory sourcing
 - [docs/aws_deployment.md](docs/aws_deployment.md) — AWS deployment details
+- [docs/demo_script.md](docs/demo_script.md) — step-by-step live demo walkthrough
 - [CHANGELOG.md](CHANGELOG.md) — build history and what's been verified along the way
 
 ## Roadmap
