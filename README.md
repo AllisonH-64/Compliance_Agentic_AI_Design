@@ -45,7 +45,13 @@ For quick manual testing without minting a JWT, run `python dev_server.py` inste
 
 ### Demo
 
-With `dev_server.py` running, `python demo_seed.py` populates it with 12 curated transactions spanning all 8 controls and a full review lifecycle (pending, assigned, in-review, completed, reopened), so `/dashboard/summary` and `/reviews/queue` have real, varied data to look at instead of an empty database. See [docs/demo_script.md](docs/demo_script.md) for a full presenter walkthrough.
+```bash
+python run_demo.py
+```
+
+One command, one terminal: starts the API in the background, seeds it with 12 curated transactions spanning all 8 controls and a full review lifecycle (pending, assigned, in-review, completed, reopened), then leaves the server running until you press Ctrl+C. Open `http://127.0.0.1:8000/docs` and follow [docs/demo_script.md](docs/demo_script.md) for the full presenter walkthrough.
+
+(`dev_server.py` + `demo_seed.py` are the same thing split across two terminals, if you'd rather run the API and the seeding step separately.)
 
 ### Authentication
 
@@ -138,7 +144,8 @@ tests/                                 API test suite
 docs/                                  Design docs
 orchestrator.py, router.py, tools.py   Optional LLM triage agent
 dev_server.py                          Local dev server with insecure-header auth
-demo_seed.py                           Seeds the local database with demo data
+run_demo.py                            One-command demo: starts the API + seeds it, single terminal
+demo_seed.py                           Seeds the local database with demo data (used standalone, or by run_demo.py)
 lambda_handler.py                      AWS Lambda entry point
 AGENTS.md, .github/agents/             Copilot workspace agent configuration
 ```

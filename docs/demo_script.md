@@ -6,12 +6,14 @@ A step-by-step walkthrough for presenting the Vendor Due-Diligence Gate live. En
 
 ```bash
 pip install -r requirements.txt
-rm -f data/audit.db          # start from a clean slate
-python dev_server.py         # terminal 1 — leave this running
-python demo_seed.py          # terminal 2 — seeds 12 cases across all 8 controls
+python run_demo.py
 ```
 
+One command, one terminal — starts the API in the background, seeds it with 12 cases across all 8 controls, and leaves the server running until you press Ctrl+C. (If you'd rather run the API and seeding as two separate steps, `python dev_server.py` in one terminal and `python demo_seed.py` in another does the same thing.)
+
 Open `http://127.0.0.1:8000/docs` in a browser. That's your demo surface — every step below is a "Try it out" click in Swagger UI, or an equivalent `curl`/browser-console `fetch` call if you'd rather narrate from the terminal.
+
+**Don't click or select text inside the terminal window `run_demo.py` is running in** — on some Windows terminal configurations (QuickEdit mode), doing so pauses or kills the process. Just leave it alone once it's up.
 
 Auth for the demo: use the `X-User-Id` / `X-User-Role` header fields directly in Swagger UI (no token needed — `dev_server.py` runs with `COMPLIANCE_ALLOW_INSECURE_HEADERS=true`). Roles used below: `employee`, `compliance_analyst`, `compliance_manager`, `auditor`.
 
@@ -69,4 +71,5 @@ If `ANTHROPIC_API_KEY` is set, `POST /agent/triage` takes a plain-English transa
 - **Server not responding**: check terminal 1 is still running `dev_server.py`.
 - **Empty dashboard/queue**: `demo_seed.py` didn't run, or `data/audit.db` was deleted after seeding — rerun it.
 - **401 on a request**: missing `X-User-Id`/`X-User-Role` headers in Swagger UI's "Try it out" panel — they're plain header fields, not a global "Authorize" lock.
-- **Want a clean re-run**: `rm -f data/audit.db`, restart `dev_server.py`, rerun `python demo_seed.py`.
+- **Want a clean re-run**: Ctrl+C `run_demo.py`, then run it again — it deletes `data/audit.db` and reseeds automatically every time.
+- **Port already in use**: set `DEV_SERVER_PORT` to something else, e.g. `DEV_SERVER_PORT=8080 python run_demo.py` (PowerShell: `$env:DEV_SERVER_PORT = "8080"` first), and use that port in the URL instead.

@@ -14,12 +14,13 @@ re-evaluates the same case_ids (an upsert) and appends more review-history event
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
 import httpx
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = os.environ.get("DEMO_BASE_URL", f"http://127.0.0.1:{os.environ.get('DEV_SERVER_PORT', '8000')}")
 EXAMPLES_DIR = Path(__file__).resolve().parent / "examples"
 
 EMPLOYEE = {"X-User-Id": "demo-employee", "X-User-Role": "employee"}
