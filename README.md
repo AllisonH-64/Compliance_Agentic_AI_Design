@@ -41,7 +41,7 @@ uvicorn app.main:app --reload
 
 Open `http://127.0.0.1:8000/docs` for the interactive API docs.
 
-For quick manual testing without minting a JWT, run `python dev_server.py` instead — it sets `COMPLIANCE_ALLOW_INSECURE_HEADERS=true` so protected endpoints accept plain `X-User-Id`/`X-User-Role` headers.
+For quick manual testing without minting a JWT, run `python dev_server.py` instead — it sets `COMPLIANCE_ALLOW_INSECURE_HEADERS=true` so protected endpoints accept plain `X-User-Id`/`X-User-Role` headers. It runs without auto-reload by default for reliability (`DEV_SERVER_RELOAD=true` to opt back in) and on port 8000 by default (`DEV_SERVER_PORT=<port>` to change it — handy if that port is ever stuck from a previous run).
 
 ### Demo
 

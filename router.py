@@ -11,7 +11,7 @@ infra/app.py) -- it's local/optional, not core to the deployed service.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.auth import AuthContext, require_roles
@@ -33,7 +33,20 @@ def triage_transaction(
         Depends(require_roles(UserRole.EMPLOYEE, UserRole.COMPLIANCE_ANALYST, UserRole.COMPLIANCE_MANAGER)),
     ],
 ):
-    return run_agent(request.description, submitted_by=current_user.user_id)
+    # This endpoint is explicitly optional (see README/AGENTS.md), so a
+    # misconfiguration (no ANTHROPIC_API_KEY, an invalid key, the model call
+    # failing) should read as "this feature isn't set up" rather than look like
+    # the core app crashed -- surface it as a clear 503, not an opaque 500.
+    try:
+        return run_agent(request.description, submitted_by=current_user.user_id)
+    except Exception as error:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "LLM triage agent is unavailable -- confirm ANTHROPIC_API_KEY is set and valid. "
+                f"Underlying error: {error}"
+            ),
+        ) from error
 
 
 # ---------------------------------------------------------------------------
