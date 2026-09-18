@@ -11,6 +11,7 @@ import aws_cdk as cdk
 
 from api_stack import ApiStack
 from data_stack import DataStack
+from governance_stack import GovernanceStack
 
 INFRA_DIR = Path(__file__).resolve().parent
 REPO_ROOT = INFRA_DIR.parent
@@ -70,6 +71,13 @@ env = cdk.Environment(
     account=os.getenv("CDK_DEFAULT_ACCOUNT"),
     region=os.getenv("CDK_DEFAULT_REGION", "us-east-1"),
 )
+
+# GovernanceStack (the GitHub Actions OIDC deploy role + AWS Budget) is optional at
+# synth time -- it needs BUDGET_ALERT_EMAIL set, which a plain `cdk synth` of the
+# app stacks shouldn't require. Deploy it explicitly once by name when you're ready:
+# BUDGET_ALERT_EMAIL=you@example.com cdk deploy VendorGateGovernanceStack
+if os.getenv("BUDGET_ALERT_EMAIL"):
+    GovernanceStack(app, "VendorGateGovernanceStack", env=env)
 
 data_stack = DataStack(app, "VendorGateDataStack", env=env)
 

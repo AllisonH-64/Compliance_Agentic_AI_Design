@@ -1,0 +1,60 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "data/rules/**"
+      - "infra/**"
+      - "lambda_handler.py"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write   # required to mint the OIDC token GitHub exchanges for AWS creds
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install app dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest tests/test_api.py -q
+
+      - name: Install CDK app dependencies
+        working-directory: infra
+        run: pip install -r requirements.txt
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk@2
+
+      # No long-lived AWS access keys anywhere in this repo or its secrets --
+      # GitHub mints a short-lived OIDC token that AWS exchanges for temporary
+      # credentials, scoped to exactly this repo + branch (see
+      # infra/governance_stack.py). Requires AWS_DEPLOY_ROLE_ARN to be set as a
+      # repo secret once GovernanceStack has been deployed by hand; see
+      # docs/aws_deployment.md.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: cdk synth
+        working-directory: infra
+        run: cdk synth --strict --app "python app.py" VendorGateDataStack VendorGateApiStack
+
+      - name: cdk deploy
+        working-directory: infra
+        run: cdk deploy --app "python app.py" VendorGateDataStack VendorGateApiStack --require-approval never

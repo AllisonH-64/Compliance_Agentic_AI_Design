@@ -15,6 +15,8 @@ See [docs/problem_statement.md](docs/problem_statement.md) for who this is for a
 - **Append-only audit trail** — every decision and review action is logged immutably
 - **Role-based access control** — four roles (`employee`, `compliance_analyst`, `compliance_manager`, `auditor`), enforced on every protected endpoint
 - **Deploys to AWS unchanged** — the same code runs on Lambda, API Gateway, DynamoDB, Cognito, and S3 via the CDK app in `infra/`
+- **CI/CD via GitHub Actions + OIDC** — a push to `main` tests, synths, and deploys automatically; no AWS access keys stored anywhere (see [docs/aws_deployment.md](docs/aws_deployment.md#cicd))
+- **Cost governance from day one** — an AWS Budget with email alerts at 80% actual / 100% forecasted spend, deployed before anything else
 - **Optional LLM triage agent** — a Claude-powered assistant that extracts structured fields from a plain-English transaction description and calls the same deterministic engine
 
 ## Architecture
@@ -161,7 +163,8 @@ AGENTS.md, .github/agents/             Copilot workspace agent configuration
 
 ## Roadmap
 
-- Run `cdk deploy` against a real AWS account and provision a first `compliance_manager` user
+- Run the one-time `VendorGateGovernanceStack` bootstrap, set the `AWS_DEPLOY_ROLE_ARN` GitHub secret, and watch `deploy.yml` actually deploy once (see [docs/aws_deployment.md](docs/aws_deployment.md#cicd))
+- Provision a first `compliance_manager` Cognito user
 - Wire `escalation_recipients` to an actual outbound channel (email/Slack)
 - Confirm the status of the Integrity in Public Life Act for `PROC-VENDOR-COI-001`
 - Extend regulatory sourcing beyond Barbados/Caribbean as the vendor base grows
