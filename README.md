@@ -1,8 +1,10 @@
 # Vendor Due-Diligence Gate
 
-A deterministic compliance engine that gates vendor spend: purchase orders and vendor transactions are checked against a versioned rule catalog before they're allowed to proceed. Every decision is explainable, cites the regulation or internal policy behind it, and leaves a permanent audit trail.
+Compliance analysts and managers at mid-market companies — too small for enterprise GRC platforms, too busy for someone to manually check every transaction — watch vendor spend get approved by habit instead of policy: invoices clear without on-file sign-off, new vendors get paid before anyone checks a sanctions list, a vendor's "updated" bank details get applied without a callback to confirm they're real (the actual mechanism behind most business-email-compromise payment fraud), and a gift to a government official goes unflagged until it's already a bribery-law violation. None of these are exotic failures — they're what happens by default when policy enforcement depends on someone remembering to apply it. The cost is real: unrecoverable fraud losses, statutory penalties (Barbados's Prevention of Corruption Act carries up to BBD$1,500,000 or 15 years imprisonment), and the inability to reconstruct why a transaction was allowed to proceed once someone asks.
 
-See [docs/problem_statement.md](docs/problem_statement.md) for who this is for and why it exists.
+This is a deterministic compliance engine that closes that gap: purchase orders and vendor transactions are checked against a versioned rule catalog before they're allowed to proceed. Every decision is explainable, cites the regulation or internal policy behind it, and leaves a permanent audit trail.
+
+See [docs/problem_statement.md](docs/problem_statement.md) for the full breakdown — including secondary stakeholders and what this project is deliberately not trying to solve.
 
 ## Features
 
