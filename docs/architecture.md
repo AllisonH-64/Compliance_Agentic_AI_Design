@@ -1,5 +1,12 @@
 # Agentic System Design for Detecting Compliance Problems
 
+> [!NOTE]
+> **This is the original design vision, not a description of what's built.** It was written domain-agnostic, before any specific domain or line of code existed, and sketches a much larger system than exists today: 8 specialized agents across 7 microservices, backed by PostgreSQL, a vector index, and a graph store (Sections 4–20, 22–30). What's actually implemented is deliberately smaller — **one FastAPI service, one deterministic rule engine, one SQLite/DynamoDB store** — see [`docs/mvp.md`](mvp.md) for the real scope and the [README](../README.md) for how to run it.
+>
+> That's not a shortfall against this vision — it's this vision's own principles (Section 3: evidence-first, policy traceability, explainable outcomes, audit by default), taken seriously rather than diluted across a multi-agent pipeline. An LLM reasoning its way through a compliance call can only *approximate* those guarantees, case by case; a deterministic rule engine over versioned JSON catalogs *is* those guarantees, by construction — every decision traces to one exact rule version, with zero model variance in the call that actually decides. The one place this vision's split between rule-engine and LLM responsibilities (Section 27) *was* built faithfully is the optional triage agent (`orchestrator.py`/`router.py`/`tools.py`): it only extracts structured fields from plain English at the front door and never touches the decision itself, which still runs through the same deterministic `POST /evaluate` every other caller uses.
+>
+> Section 2A explains the specific domain choice; the note above Section 21 does the same for the AWS deployment layer. Past that point, the rest of this document is the original sketch, kept for the record of where the project's thinking started — not a spec to build toward.
+
 ## 1. Purpose
 
 Design an agentic AI system that continuously checks business processes, documents, transactions, and model outputs for compliance problems. The system should detect likely issues early, explain why something may be non-compliant, route ambiguous cases to a human reviewer, and maintain an auditable record of every decision.

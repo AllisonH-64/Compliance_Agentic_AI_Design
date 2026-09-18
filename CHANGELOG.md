@@ -2,6 +2,18 @@
 
 Build history for the Vendor Due-Diligence Gate, newest first. This repo pivoted through a few earlier domains (procurement → gifts/hospitality → employee conduct) before settling here — that history is in `git log` but not repeated below, since none of it describes the current codebase.
 
+## Added a clarifying banner to the architecture vision doc
+
+`docs/architecture.md` is a 32-section, domain-agnostic design vision written before any code existed — 8 agents, 7 microservices, Postgres + a vector index + a graph store — and the actual system is one FastAPI service with a deterministic rule engine. Section 2A and the Section 21 note already explained the domain and AWS-deployment gaps respectively, but a first-time reader hitting the top of the document had no signal that most of it describes a system that was never built. Added a banner right under the title making that explicit, and framing it honestly: the built system isn't a shortfall against the vision, it's the vision's own evidence-first/traceability/explainability principles taken seriously, since a deterministic rule engine satisfies them by construction where a multi-agent LLM pipeline could only approximate them.
+
+## Removed the last of the old employee-conduct-domain docs
+
+`docs/` still had ten narrative/summary files (`ethics_workflow.md`, `ethical_risk_assessment.md`, `governance_operating_model.md`, `risk_signals_and_escalation_rules.md`, `workflow_swimlane.md`, `executive_summary_compliance_agent.md`, `submission_summary.md`, `advanced_beginner_summary.md`, `advanced_beginner_summary_slides.md`, `simple_summary_teen.md`) plus two standalone HTML summaries (`progress_review.html`, `compliance_agentic_ai_summary_white.html`) describing the retired `CONDUCT-*` controls (harassment, discrimination, client treatment, international governance) — none of it matched the current codebase, and nothing else in the repo linked to any of them. Deleted all twelve. Also fixed the last "incident review" phrasing (old-domain vocabulary) in `.github/agents/README.md` and `.github/agents/compliance-agent.agent.md` to "vendor transaction review."
+
+## Added a GitHub Actions OIDC deploy pipeline and an AWS Budget
+
+`infra/governance_stack.py` (`VendorGateGovernanceStack`) adds a GitHub OIDC provider plus a deploy role scoped to this repo's `main` branch — no stored AWS access keys anywhere — and a monthly cost budget with email alerts at 80% actual / 100% forecasted spend. `.github/workflows/ci.yml` tests and `cdk synth`s every pull request; `.github/workflows/deploy.yml` deploys `VendorGateDataStack`/`VendorGateApiStack` via that OIDC role on every push to `main`. Requires a one-time manual bootstrap (`cdk deploy VendorGateGovernanceStack` + an `AWS_DEPLOY_ROLE_ARN` GitHub secret) before `deploy.yml` can do anything — see `docs/aws_deployment.md`.
+
 ## Rebuilt and wired in the LLM triage agent
 
 `orchestrator.py`/`router.py`/`tools.py` were pure scaffolding — never mounted into `app/main.py`, and stale enough that they wouldn't have worked even if mounted:

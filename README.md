@@ -155,7 +155,7 @@ AGENTS.md, .github/agents/             Copilot workspace agent configuration
 ## Documentation
 
 - [docs/problem_statement.md](docs/problem_statement.md) — who has the problem and why
-- [docs/architecture.md](docs/architecture.md) — end-to-end design
+- [docs/architecture.md](docs/architecture.md) — the original design vision, with a banner up top on how the built system deliberately scoped down from it
 - [docs/mvp.md](docs/mvp.md) — MVP scope, components, and regulatory sourcing
 - [docs/aws_deployment.md](docs/aws_deployment.md) — AWS deployment details
 - [docs/demo_script.md](docs/demo_script.md) — step-by-step live demo walkthrough
@@ -169,4 +169,3 @@ AGENTS.md, .github/agents/             Copilot workspace agent configuration
 - Confirm the status of the Integrity in Public Life Act for `PROC-VENDOR-COI-001`
 - Extend regulatory sourcing beyond Barbados/Caribbean as the vendor base grows
 - Confirm real numeric regulatory floors where they exist, for `validate_no_internal_policy_conflicts()` to enforce
-- Decide the fate of `docs/`'s older employee-conduct-domain narrative docs (`ethics_workflow.md` and similar) — retired along with that domain but never removed

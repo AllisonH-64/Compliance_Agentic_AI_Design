@@ -1,5 +1,5 @@
 ---
-description: "Use when working on the Compliance_Agentic_AI_Design FastAPI compliance app, deterministic rule evaluation, incident review workflow, audit history, or related tests and docs."
+description: "Use when working on the Compliance_Agentic_AI_Design FastAPI compliance app, deterministic rule evaluation, vendor transaction review workflow, audit history, or related tests and docs."
 name: "Compliance Agent"
 tools: [read, search, edit, execute, todo]
 argument-hint: "Task details for the compliance workspace"

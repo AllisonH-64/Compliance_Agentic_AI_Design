@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["dev_server.py"],
       "port": 8000
+    },
+    {
+      "name": "compliance-gate-demo",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["run_demo.py"],
+      "port": 8000
     }
   ]
 }

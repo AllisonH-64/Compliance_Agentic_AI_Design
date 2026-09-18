@@ -114,4 +114,3 @@ None of the researched sources gave a verified numeric threshold (a specific dol
 - add explicit event emissions for risk computation and escalation transitions
 - extend summary outputs with median and p95 review turnaround metrics
 - confirm the Integrity in Public Life Act's enactment status and real numeric regulatory floors (approval thresholds, part-time hours) where they exist
-- decide the fate of the retired employee-conduct rule catalogs and narrative docs (archive vs. separate deployment)
