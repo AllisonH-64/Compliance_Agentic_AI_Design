@@ -21,7 +21,9 @@ See [docs/problem_statement.md](docs/problem_statement.md) for who this is for a
 
 ## Architecture
 
-A FastAPI service (`app/`) built around a deterministic rule engine (`app/engine.py`) that reads versioned JSON rule catalogs (`data/rules/`). Storage is backend-agnostic (`app/storage.py`) — SQLite locally, DynamoDB in AWS — selected by an environment variable, with no code changes required. See [docs/architecture.md](docs/architecture.md) for the full design.
+![Architecture diagram](docs/architecture_diagram.svg)
+
+A FastAPI service (`app/`) built around a deterministic rule engine (`app/engine.py`) that reads versioned JSON rule catalogs (`data/rules/`). Storage is backend-agnostic (`app/storage.py`) — SQLite locally, DynamoDB in AWS — selected by an environment variable, with no code changes required. See [docs/architecture.md](docs/architecture.md) for the original design vision and how the built system deliberately scoped down from it.
 
 ## Getting started
 

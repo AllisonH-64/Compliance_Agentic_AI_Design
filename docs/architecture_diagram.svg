@@ -1,0 +1,122 @@
+<svg viewBox="0 0 1500 1020" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4A5568"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#B8862E"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1500" height="1020" fill="#FBFBF8"/>
+
+  <text x="750" y="40" text-anchor="middle" font-size="26" font-weight="700" fill="#14213D">Vendor Due-Diligence Gate — Architecture</text>
+  <text x="750" y="64" text-anchor="middle" font-size="15" fill="#4A5568">Same application code, two backends — selected by COMPLIANCE_STORAGE_BACKEND, no code changes</text>
+
+  <!-- Client -->
+  <rect x="600" y="90" width="300" height="56" rx="10" fill="#14213D"/>
+  <text x="750" y="123" text-anchor="middle" font-size="16" font-weight="600" fill="#FBFBF8">Client — Swagger UI / curl / LLM agent</text>
+
+  <!-- Auth label -->
+  <line x1="750" y1="146" x2="750" y2="176" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="765" y="165" font-size="13" fill="#4A5568">JWT: HS256 (local) or RS256 via Cognito JWKS (AWS)</text>
+
+  <!-- Two entry points -->
+  <rect x="330" y="180" width="330" height="60" rx="10" fill="#F1F2F4" stroke="#8A9099" stroke-width="1.5"/>
+  <text x="495" y="205" text-anchor="middle" font-size="15" font-weight="700" fill="#14213D">Local</text>
+  <text x="495" y="226" text-anchor="middle" font-size="14" fill="#4A5568">uvicorn — dev_server.py / run_demo.py</text>
+
+  <rect x="840" y="180" width="330" height="60" rx="10" fill="#FFF4E5" stroke="#B8862E" stroke-width="1.5"/>
+  <text x="1005" y="205" text-anchor="middle" font-size="15" font-weight="700" fill="#8A6421">AWS</text>
+  <text x="1005" y="226" text-anchor="middle" font-size="14" fill="#8A6421">API Gateway (HTTP API) → Lambda (Mangum)</text>
+
+  <line x1="700" y1="146" x2="495" y2="180" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="800" y1="146" x2="1005" y2="180" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Converge into app core -->
+  <line x1="495" y1="240" x2="700" y2="280" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1005" y1="240" x2="800" y2="280" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="450" y="284" width="600" height="64" rx="10" fill="#14213D"/>
+  <text x="750" y="310" text-anchor="middle" font-size="16" font-weight="700" fill="#FBFBF8">FastAPI app (app/main.py) + RBAC (app/auth.py)</text>
+  <text x="750" y="330" text-anchor="middle" font-size="13" fill="#C7CCD9">4 roles: employee, compliance_analyst, compliance_manager, auditor</text>
+
+  <line x1="750" y1="348" x2="750" y2="378" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="400" y="382" width="700" height="70" rx="10" fill="#FFFFFF" stroke="#14213D" stroke-width="2"/>
+  <text x="750" y="408" text-anchor="middle" font-size="16" font-weight="700" fill="#14213D">Deterministic rule engine (app/engine.py)</text>
+  <text x="750" y="430" text-anchor="middle" font-size="13" fill="#4A5568">8 versioned rule catalogs, each citing real regulation (data/rules/*.json)</text>
+  <text x="750" y="446" text-anchor="middle" font-size="12" fill="#8A9099">→ decision, risk band, escalation recipients — no LLM in this path</text>
+
+  <line x1="750" y1="452" x2="750" y2="482" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Storage dispatcher -->
+  <rect x="500" y="486" width="500" height="50" rx="10" fill="#F1F2F4" stroke="#8A9099" stroke-width="1.5"/>
+  <text x="750" y="516" text-anchor="middle" font-size="14" font-weight="700" fill="#14213D">Storage dispatcher (app/storage.py) — COMPLIANCE_STORAGE_BACKEND</text>
+
+  <line x1="650" y1="536" x2="495" y2="570" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="850" y1="536" x2="1005" y2="570" stroke="#4A5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="330" y="574" width="330" height="60" rx="10" fill="#F1F2F4" stroke="#8A9099" stroke-width="1.5"/>
+  <text x="495" y="600" text-anchor="middle" font-size="14" font-weight="700" fill="#14213D">SQLite (local)</text>
+  <text x="495" y="620" text-anchor="middle" font-size="12" fill="#4A5568">decisions, reviews + append-only history</text>
+
+  <rect x="840" y="574" width="330" height="60" rx="10" fill="#FFF4E5" stroke="#B8862E" stroke-width="1.5"/>
+  <text x="1005" y="600" text-anchor="middle" font-size="14" font-weight="700" fill="#8A6421">DynamoDB (AWS)</text>
+  <text x="1005" y="620" text-anchor="middle" font-size="12" fill="#8A6421">4 tables, PAY_PER_REQUEST, streams on history tables</text>
+
+  <!-- Audit export chain, AWS only -->
+  <line x1="1005" y1="634" x2="1005" y2="664" stroke="#B8862E" stroke-width="2" marker-end="url(#arrowAmber)"/>
+  <rect x="840" y="668" width="330" height="50" rx="10" fill="#FFF4E5" stroke="#B8862E" stroke-width="1.5"/>
+  <text x="1005" y="698" text-anchor="middle" font-size="13" font-weight="700" fill="#8A6421">Audit-export Lambda (DynamoDB Streams)</text>
+
+  <line x1="1005" y1="718" x2="1005" y2="748" stroke="#B8862E" stroke-width="2" marker-end="url(#arrowAmber)"/>
+  <rect x="840" y="752" width="330" height="50" rx="10" fill="#FFF4E5" stroke="#B8862E" stroke-width="1.5"/>
+  <text x="1005" y="782" text-anchor="middle" font-size="13" font-weight="700" fill="#8A6421">S3 — immutable audit archive (RETAIN)</text>
+
+  <!-- CloudWatch + Budget, monitoring AWS side -->
+  <rect x="1210" y="180" width="260" height="622" rx="12" fill="none" stroke="#B8862E" stroke-width="1.5" stroke-dasharray="6,5"/>
+  <text x="1340" y="205" text-anchor="middle" font-size="13" font-weight="700" fill="#8A6421">Governance</text>
+  <rect x="1230" y="220" width="220" height="70" rx="8" fill="#FFFFFF" stroke="#B8862E" stroke-width="1.5"/>
+  <text x="1340" y="245" text-anchor="middle" font-size="13" font-weight="700" fill="#8A6421">CloudWatch alarms</text>
+  <text x="1340" y="263" text-anchor="middle" font-size="11" fill="#4A5568">API errors/throttles/p99,</text>
+  <text x="1340" y="278" text-anchor="middle" font-size="11" fill="#4A5568">export Lambda iterator age</text>
+
+  <rect x="1230" y="310" width="220" height="70" rx="8" fill="#FFFFFF" stroke="#B8862E" stroke-width="1.5"/>
+  <text x="1340" y="335" text-anchor="middle" font-size="13" font-weight="700" fill="#8A6421">AWS Budget</text>
+  <text x="1340" y="353" text-anchor="middle" font-size="11" fill="#4A5568">$25/mo, email alert at</text>
+  <text x="1340" y="368" text-anchor="middle" font-size="11" fill="#4A5568">80% actual / 100% forecast</text>
+
+  <!-- Optional LLM agent -->
+  <rect x="60" y="284" width="330" height="90" rx="10" fill="#F5F0FA" stroke="#7B5FA0" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <text x="225" y="308" text-anchor="middle" font-size="13" font-weight="700" fill="#5B3E82">Optional: LLM triage agent</text>
+  <text x="225" y="327" text-anchor="middle" font-size="11" fill="#5B3E82">orchestrator.py / router.py / tools.py</text>
+  <text x="225" y="343" text-anchor="middle" font-size="11" fill="#5B3E82">extracts fields from plain English —</text>
+  <text x="225" y="358" text-anchor="middle" font-size="11" fill="#5B3E82">never decides risk itself</text>
+  <line x1="390" y1="330" x2="450" y2="316" stroke="#7B5FA0" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="405" y="300" font-size="10" fill="#7B5FA0">calls the real</text>
+  <text x="392" y="312" font-size="10" fill="#7B5FA0">POST /evaluate</text>
+
+  <!-- CI/CD path -->
+  <rect x="60" y="574" width="330" height="70" rx="10" fill="#EAF6EF" stroke="#2F7D5B" stroke-width="1.5"/>
+  <text x="225" y="600" text-anchor="middle" font-size="13" font-weight="700" fill="#1F5A3E">GitHub Actions</text>
+  <text x="225" y="618" text-anchor="middle" font-size="11" fill="#1F5A3E">ci.yml: test + synth every PR</text>
+  <text x="225" y="633" text-anchor="middle" font-size="11" fill="#1F5A3E">deploy.yml: deploy on push to main</text>
+
+  <rect x="60" y="668" width="330" height="70" rx="10" fill="#EAF6EF" stroke="#2F7D5B" stroke-width="1.5"/>
+  <text x="225" y="694" text-anchor="middle" font-size="13" font-weight="700" fill="#1F5A3E">VendorGateGovernanceStack</text>
+  <text x="225" y="712" text-anchor="middle" font-size="11" fill="#1F5A3E">GitHub OIDC provider + deploy role,</text>
+  <text x="225" y="727" text-anchor="middle" font-size="11" fill="#1F5A3E">scoped to sts:AssumeRole on CDK roles only</text>
+
+  <line x1="225" y1="644" x2="225" y2="668" stroke="#2F7D5B" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="390" y1="700" x2="840" y2="604" stroke="#2F7D5B" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="490" y="642" font-size="11" fill="#1F5A3E">OIDC (no stored AWS keys) → cdk deploy:</text>
+  <text x="490" y="656" font-size="11" fill="#1F5A3E">VendorGateDataStack + VendorGateApiStack</text>
+
+  <!-- Footer: measured latency -->
+  <rect x="60" y="850" width="1380" height="120" rx="10" fill="#FFFFFF" stroke="#E3E6E4" stroke-width="1.5"/>
+  <text x="80" y="878" font-size="14" font-weight="700" fill="#14213D">Measured, not assumed</text>
+  <text x="80" y="902" font-size="13" fill="#4A5568">POST /evaluate latency (30 requests, local SQLite backend, single warm process): p50 = 11.4ms, p95 = 12.7ms, max = 16.5ms.</text>
+  <text x="80" y="922" font-size="13" fill="#4A5568">Deliberately not yet deployed to AWS — infra/ is cdk synth --strict verified; deploying is a one-time manual bootstrap done closer to demo day.</text>
+  <text x="80" y="942" font-size="13" fill="#4A5568">Every control's rule catalog cites a real, researched regulation or an explicitly-flagged internal-only threshold — no invented citations.</text>
+</svg>
