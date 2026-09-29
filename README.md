@@ -165,6 +165,7 @@ AGENTS.md, .github/agents/             Copilot workspace agent configuration
 - [docs/demo_script.md](docs/demo_script.md) — step-by-step live demo walkthrough
 - [docs/reflection.md](docs/reflection.md) — what broke, what I'd design differently, and a Six Pillars self-review
 - [CHANGELOG.md](CHANGELOG.md) — build history and what's been verified along the way
+- [docs/presentation.pdf](docs/presentation.pdf) / [docs/presentation.pptx](docs/presentation.pptx) — the capstone slide deck
 
 ## Roadmap
 
