@@ -2,6 +2,10 @@
 
 Build history for the Vendor Due-Diligence Gate, newest first. This repo pivoted through a few earlier domains (procurement → gifts/hospitality → employee conduct) before settling here — that history is in `git log` but not repeated below, since none of it describes the current codebase.
 
+## Added a reflection doc and Six Pillars self-review
+
+`docs/reflection.md`: an honest look back (the LLM agent was fully broken until tested live, not just read; the AWS layer was a rubric-driven retrofit rather than planned from day one; the success metric was measured last instead of first) plus a Well-Architected Six Pillars self-review. The weakest answer — Operational Excellence's alarms, which are real but have never actually fired since nothing's deployed — is called out directly rather than smoothed over; it's the reason the AWS bootstrap stays deliberately deferred to closer to demo day instead of being called "done" now.
+
 ## Added a clarifying banner to the architecture vision doc
 
 `docs/architecture.md` is a 32-section, domain-agnostic design vision written before any code existed — 8 agents, 7 microservices, Postgres + a vector index + a graph store — and the actual system is one FastAPI service with a deterministic rule engine. Section 2A and the Section 21 note already explained the domain and AWS-deployment gaps respectively, but a first-time reader hitting the top of the document had no signal that most of it describes a system that was never built. Added a banner right under the title making that explicit, and framing it honestly: the built system isn't a shortfall against the vision, it's the vision's own evidence-first/traceability/explainability principles taken seriously, since a deterministic rule engine satisfies them by construction where a multi-agent LLM pipeline could only approximate them.

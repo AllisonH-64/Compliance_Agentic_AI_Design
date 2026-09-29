@@ -163,6 +163,7 @@ AGENTS.md, .github/agents/             Copilot workspace agent configuration
 - [docs/mvp.md](docs/mvp.md) — MVP scope, components, and regulatory sourcing
 - [docs/aws_deployment.md](docs/aws_deployment.md) — AWS deployment details
 - [docs/demo_script.md](docs/demo_script.md) — step-by-step live demo walkthrough
+- [docs/reflection.md](docs/reflection.md) — what broke, what I'd design differently, and a Six Pillars self-review
 - [CHANGELOG.md](CHANGELOG.md) — build history and what's been verified along the way
 
 ## Roadmap
